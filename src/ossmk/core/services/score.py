@@ -15,7 +15,9 @@ class RuleSet:
     # mapping from dimension -> {kinds: set[str], weight: float, weights_by_kind: dict[str,float], clip_per_user_day: dict[str,int]}
     dimensions: dict[str, dict]
     fairness: dict[str, int] | None = None  # global clip per user per day by kind
-    decay_half_life_days: float | None = None  # global half-life
+    decay_half_life_days: float | None = None  # global half-life (exponential)
+    decay_mode: str | None = None  # 'exponential' (default), 'linear', 'window'
+    decay_window_days: float | None = None  # for 'window' mode
 
 
 def _default_rules() -> RuleSet:
@@ -58,7 +60,13 @@ def load_rules(rules: str) -> RuleSet:
         # decay
         hl = data.get("decay_half_life_days")
         decay_global = float(hl) if hl is not None else None
-        return RuleSet(dimensions=dims or _default_rules().dimensions, fairness=fairness_map, decay_half_life_days=decay_global)
+        return RuleSet(
+            dimensions=dims or _default_rules().dimensions,
+            fairness=fairness_map,
+            decay_half_life_days=decay_global,
+            decay_mode=data.get("decay_mode"),
+            decay_window_days=data.get("decay_window_days"),
+        )
     return _default_rules()
 
 
@@ -82,6 +90,11 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[di
         decay_hl = rules.decay_half_life_days or 0.0
     from math import log, exp
     lam = log(2) / decay_hl if decay_hl and decay_hl > 0 else 0.0
+    decay_mode = (rules.decay_mode or os.getenv("OSSMK_DECAY_MODE") or "exponential").lower()
+    try:
+        window_days = float(os.getenv("OSSMK_DECAY_WINDOW_DAYS", "0")) or (rules.decay_window_days or 0.0)
+    except Exception:
+        window_days = rules.decay_window_days or 0.0
     for ev in events:
         kind = ev.kind.value if hasattr(ev.kind, "value") else str(ev.kind)
         day = getattr(ev, "created_at", None)
@@ -110,10 +123,18 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[di
                         org_penalty = 1.0
                     w *= org_penalty
                 # apply decay by event age
-                if lam > 0 and getattr(ev, "created_at", None):
+                if getattr(ev, "created_at", None):
                     try:
                         age_days = (datetime.now(timezone.utc) - ev.created_at).total_seconds() / 86400.0
-                        w *= exp(-lam * age_days)
+                        if decay_mode == "exponential" and lam > 0:
+                            w *= exp(-lam * age_days)
+                        elif decay_mode == "linear" and window_days > 0:
+                            # linearly drop to zero at window_days
+                            w *= max(0.0, 1.0 - (age_days / window_days))
+                        elif decay_mode == "window" and window_days > 0:
+                            # count only within window
+                            if age_days > window_days:
+                                continue
                     except Exception:
                         pass
                 scores[ev.user_id][dim] += float(w)
