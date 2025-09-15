@@ -73,10 +73,12 @@ class GitHubProvider:
         owner, name = repo.split("/", 1)
         base_url = f"https://api.github.com/repos/{owner}/{name}/issues?state=all&per_page=100"
         events: list[ContributionEvent] = []
+        from ossmk.metrics import record
         with http_client() as client:
             url = base_url
             while True:
-                data, next_url, _ = self._cached_get_json(client, url)
+                with record("github.issues_prs"):
+                    data, next_url, _ = self._cached_get_json(client, url)
                 for item in data:
                     kind = EventKind.pr if "pull_request" in item else EventKind.issue
                     user = item.get("user") or {}
@@ -105,10 +107,12 @@ class GitHubProvider:
             params += f"&{qp}"
         base_url = f"https://api.github.com/repos/{owner}/{name}/commits?{params}"
         events: list[ContributionEvent] = []
+        from ossmk.metrics import record
         with http_client() as client:
             url = base_url
             while True:
-                data, next_url, _ = self._cached_get_json(client, url)
+                with record("github.commits"):
+                    data, next_url, _ = self._cached_get_json(client, url)
                 for c in data:
                     author = (c.get("author") or {}).get("login") or (c.get("committer") or {}).get("login") or "unknown"
                     if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(author):
@@ -255,10 +259,12 @@ class GitHubProvider:
         pr_url = f"https://api.github.com/repos/{owner}/{name}/pulls?state=all&per_page=100&sort=updated"
         events: list[ContributionEvent] = []
         prs: list[dict[str, Any]] = []
+        from ossmk.metrics import record
         async with http_async_client() as client:
             url = pr_url
             while True and (max_prs is None or len(prs) < max_prs):
-                data, next_url, _ = await self._cached_get_json_async(client, url)
+                with record("github.prs"):
+                    data, next_url, _ = await self._cached_get_json_async(client, url)
                 prs.extend(data)
                 if not next_url or (max_prs is not None and len(prs) >= max_prs):
                     break
@@ -270,7 +276,8 @@ class GitHubProvider:
                 reviews_url = f"https://api.github.com/repos/{owner}/{name}/pulls/{num}/reviews?per_page=100"
                 url = reviews_url
                 while True:
-                    data, next_url, _ = await self._cached_get_json_async(client, url)
+                    with record("github.reviews"):
+                        data, next_url, _ = await self._cached_get_json_async(client, url)
                     for rv in data:
                         user = (rv.get("user") or {}).get("login") or "unknown"
                         events.append(
@@ -393,6 +400,58 @@ class GitHubProvider:
                 after = page.get("endCursor")
         return events
 
+    async def fetch_repo_reviews_graphql_async(self, repo: str, max_reviews: int | None = 1000) -> list[ContributionEvent]:
+        owner, name = repo.split("/", 1)
+        url = "https://api.github.com/graphql"
+        headers = self._auth_headers()
+        query = (
+            "query($owner:String!, $name:String!, $after:String){"
+            "  repository(owner:$owner, name:$name){"
+            "    pullRequests(states:[OPEN,MERGED,CLOSED], first:100, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}){"
+            "      pageInfo{ hasNextPage endCursor }"
+            "      nodes{ number reviews(first:100){ pageInfo{ hasNextPage endCursor } nodes{ id author{ login } submittedAt } } }"
+            "    }"
+            "  }"
+            "}"
+        )
+        events: list[ContributionEvent] = []
+        async with http_async_client() as client:
+            after = None
+            total = 0
+            while True and (max_reviews is None or total < max_reviews):
+                resp = await client.post(url, headers=headers, json={"query": query, "variables": {"owner": owner, "name": name, "after": after}})
+                resp.raise_for_status()
+                data = resp.json().get("data") or {}
+                prs = (((data.get("repository") or {}).get("pullRequests")) or {})
+                nodes = prs.get("nodes") or []
+                for pr in nodes:
+                    revs = (pr.get("reviews") or {})
+                    for rv in (revs.get("nodes") or []):
+                        user = (rv.get("author") or {}).get("login") or "unknown"
+                        if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(user):
+                            continue
+                        events.append(
+                            ContributionEvent(
+                                id=str(rv.get("id")),
+                                kind=EventKind.review,
+                                repo_id=f"github.com/{owner}/{name}",
+                                user_id=str(user),
+                                created_at=rv.get("submittedAt"),
+                                lines_added=0,
+                                lines_removed=0,
+                            )
+                        )
+                        total += 1
+                        if max_reviews is not None and total >= max_reviews:
+                            break
+                    if max_reviews is not None and total >= max_reviews:
+                        break
+                page = prs.get("pageInfo") or {}
+                if not page.get("hasNextPage") or (max_reviews is not None and total >= max_reviews):
+                    break
+                after = page.get("endCursor")
+        return events
+
     async def fetch_user_contributions_graphql_full_async(
         self, login: str, since: str | None = None, max_repos: int | None = 20
     ) -> list[ContributionEvent]:
@@ -409,13 +468,17 @@ class GitHubProvider:
             conc = 5
         sem = asyncio.Semaphore(max(1, min(conc, 20)))
         commits: list[ContributionEvent] = []
+        reviews: list[ContributionEvent] = []
 
         async def run(repo: str) -> None:
             async with sem:
                 try:
-                    commits.extend(await self.fetch_repo_commits_graphql_async(repo, since=since))
+                    c = await self.fetch_repo_commits_graphql_async(repo, since=since)
+                    r = await self.fetch_repo_reviews_graphql_async(repo)
+                    commits.extend(c)
+                    reviews.extend(r)
                 except Exception:
                     return
 
         await asyncio.gather(*(run(r) for r in repos))
-        return pr_issue + commits
+        return pr_issue + commits + reviews

@@ -41,7 +41,11 @@ def github_app_headers() -> dict[str, str] | None:
     pem = os.getenv("GITHUB_APP_PRIVATE_KEY")
     inst_id = os.getenv("GITHUB_APP_INSTALLATION_ID")
     if not (app_id and pem and inst_id):
-        return None
+        # Try auto-detect installation if owner/repo provided
+        owner = os.getenv("OSSMK_GH_INSTALLATION_OWNER")
+        repo = os.getenv("OSSMK_GH_INSTALLATION_REPO")
+        if not (app_id and pem and (owner or repo)):
+            return None
     try:
         import jwt  # PyJWT
     except Exception as e:  # pragma: no cover
@@ -51,6 +55,26 @@ def github_app_headers() -> dict[str, str] | None:
     payload = {"iat": now - 60, "exp": now + 9 * 60, "iss": app_id}
     encoded = jwt.encode(payload, pem, algorithm="RS256")
     with httpx.Client(timeout=30) as client:
+        if not inst_id:
+            # list installations and pick by owner (account.login) if provided
+            r0 = client.get(
+                "https://api.github.com/app/installations",
+                headers={"Authorization": f"Bearer {encoded}", "Accept": "application/vnd.github+json"},
+            )
+            r0.raise_for_status()
+            installs = r0.json()
+            target = None
+            if owner:
+                for ins in installs:
+                    acct = (ins.get("account") or {}).get("login")
+                    if acct and acct.lower() == owner.lower():
+                        target = ins.get("id")
+                        break
+            if not target and installs:
+                target = installs[0].get("id")
+            inst_id = str(target) if target else None
+            if not inst_id:
+                return None
         r = client.post(
             f"https://api.github.com/app/installations/{inst_id}/access_tokens",
             headers={"Authorization": f"Bearer {encoded}", "Accept": "application/vnd.github+json"},
