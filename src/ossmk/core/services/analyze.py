@@ -47,7 +47,7 @@ def analyze_github_user(
     if api == "rest":
         events: list[ContributionEvent] = github.fetch_user_contributions(login, since=since)
     elif api == "graphql":
-        events = asyncio.run(github.fetch_user_contributions_graphql_async(login, since=since))
+        events = asyncio.run(github.fetch_user_contributions_graphql_full_async(login, since=since))
     else:
         # auto: parallel REST for breadth and speed
         events = asyncio.run(github.fetch_user_contributions_async(login, since=since))

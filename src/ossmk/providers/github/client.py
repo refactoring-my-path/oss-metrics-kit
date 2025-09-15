@@ -338,3 +338,85 @@ class GitHubProvider:
                     break
                 after = page.get("endCursor")
         return events
+
+    async def fetch_repo_commits_graphql_async(self, repo: str, since: str | None = None) -> list[ContributionEvent]:
+        """Fetch commits via GraphQL commit history on default branch."""
+        owner, name = repo.split("/", 1)
+        url = "https://api.github.com/graphql"
+        headers = self._auth_headers()
+        query = (
+            "query($owner:String!, $name:String!, $since:GitTimestamp){"
+            "  repository(owner:$owner, name:$name){"
+            "    defaultBranchRef {"
+            "      target {"
+            "        ... on Commit {"
+            "          history(first:100, since:$since){ pageInfo{ hasNextPage endCursor } nodes{ oid committedDate author{ user{ login } } } }"
+            "        }"
+            "      }"
+            "    }"
+            "  }"
+            "}"
+        )
+        params = {"owner": owner, "name": name, "since": parse_since(since)}
+        events: list[ContributionEvent] = []
+        async with http_async_client() as client:
+            after = None
+            while True:
+                variables = dict(params)
+                if after:
+                    # GitTimestamp doesn't take cursor; after applies to connection
+                    pass
+                resp = await client.post(url, headers=headers, json={"query": query, "variables": variables})
+                resp.raise_for_status()
+                data = resp.json().get("data") or {}
+                repo_data = (data.get("repository") or {}).get("defaultBranchRef") or {}
+                target = repo_data.get("target") or {}
+                history = (target.get("history") or {})
+                nodes = history.get("nodes") or []
+                for n in nodes:
+                    login = (((n.get("author") or {}).get("user") or {}) or {}).get("login") or "unknown"
+                    if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(login):
+                        continue
+                    events.append(
+                        ContributionEvent(
+                            id=str(n.get("oid")),
+                            kind=EventKind.commit,
+                            repo_id=f"github.com/{owner}/{name}",
+                            user_id=str(login),
+                            created_at=n.get("committedDate"),
+                            lines_added=0,
+                            lines_removed=0,
+                        )
+                    )
+                page = history.get("pageInfo") or {}
+                if not page.get("hasNextPage"):
+                    break
+                after = page.get("endCursor")
+        return events
+
+    async def fetch_user_contributions_graphql_full_async(
+        self, login: str, since: str | None = None, max_repos: int | None = 20
+    ) -> list[ContributionEvent]:
+        """GraphQL-first collection: PR/Issue by search + per-repo commit history."""
+        # PR/Issue authored by user (search)
+        pr_issue = await self.fetch_user_contributions_graphql_async(login, since=since)
+        # Per-repo commit history for user's own repos
+        repos = self.fetch_user_repos(login)
+        if max_repos is not None:
+            repos = repos[:max_repos]
+        try:
+            conc = int(os.getenv("OSSMK_CONCURRENCY", "5"))
+        except Exception:
+            conc = 5
+        sem = asyncio.Semaphore(max(1, min(conc, 20)))
+        commits: list[ContributionEvent] = []
+
+        async def run(repo: str) -> None:
+            async with sem:
+                try:
+                    commits.extend(await self.fetch_repo_commits_graphql_async(repo, since=since))
+                except Exception:
+                    return
+
+        await asyncio.gather(*(run(r) for r in repos))
+        return pr_issue + commits

@@ -93,7 +93,7 @@ ossmk analyze-user <your_github_login> --out -
 - 私有ルール（TOML）はリポ外に保管し、`OSSMK_RULES_FILE` で指定。`rules=auto|default` で自動ロード。
 - 依存はエクストラで分離（Postgres/Parquet/LLM）。最小構成で運用可能。
 
-バックエンド統合の詳細は `docs/INTEGRATION.md` を参照。
+バックエンド統合の詳細は `docs/INTEGRATION.md` を参照。BoostBit向けの手順集は `docs/BOOSTBIT_QUICKSTART.md` を参照。
 
 ## 環境変数（まとめ）
 
