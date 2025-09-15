@@ -41,6 +41,7 @@ with connect() as conn:
 
 - Analyze and return summary: `ossmk analyze-user <login> --out -`
 - Persist scores to Postgres: `ossmk analyze-user <login> --save-pg`
+ - Test rules: `ossmk rules-test --events events.json --rules rules.toml --expect-total-min 10 --expect-dim code>=5`
 
 ## Security best practices
 

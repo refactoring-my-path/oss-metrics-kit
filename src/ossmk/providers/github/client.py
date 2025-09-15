@@ -9,7 +9,6 @@ import httpx
 from ossmk.core.models import ContributionEvent, EventKind
 from ossmk.storage.sqlite import HttpCache
 from ossmk.utils import (
-    github_token_from_env,
     http_client,
     http_get,
     utcnow_iso,
@@ -18,6 +17,7 @@ from ossmk.utils import (
     http_async_client,
     http_get_async,
     is_bot_login,
+    github_auth_headers,
 )
 import os
 
@@ -29,8 +29,7 @@ class GitHubProvider:
         self.cache = HttpCache()
 
     def _auth_headers(self) -> dict[str, str]:
-        token = github_token_from_env()
-        return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+        return github_auth_headers()
 
     def _cached_get_json(self, client: httpx.Client, url: str) -> tuple[list[dict[str, Any]], str | None, httpx.Response]:
         headers = self._auth_headers()
