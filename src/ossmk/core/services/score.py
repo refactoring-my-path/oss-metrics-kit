@@ -63,6 +63,11 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[di
     # fairness counters per user-kind-day
     counters: dict[tuple[str, str, str], int] = defaultdict(int)
     fair_default = rules.fairness or {}
+    import os
+    try:
+        self_repo_penalty = float(os.getenv("OSSMK_SELF_REPO_PENALTY", "1.0"))
+    except Exception:
+        self_repo_penalty = 1.0
     for ev in events:
         kind = ev.kind.value if hasattr(ev.kind, "value") else str(ev.kind)
         day = getattr(ev, "created_at", None)
@@ -76,6 +81,13 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[di
         for dim, spec in rules.dimensions.items():
             if kind in spec.get("kinds", set()):
                 w = spec.get("weights_by_kind", {}).get(kind, spec.get("weight", 1.0))
+                # penalize self-repo events if configured
+                try:
+                    host, owner, _name = (ev.repo_id or "///").split("/", 2)
+                except Exception:
+                    owner = ""
+                if self_repo_penalty < 1.0 and owner and ev.user_id and ev.user_id.lower() == owner.lower():
+                    w *= self_repo_penalty
                 scores[ev.user_id][dim] += float(w)
     # flatten
     out: list[dict] = []
