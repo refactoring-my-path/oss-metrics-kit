@@ -1,23 +1,25 @@
 from __future__ import annotations
 
+import asyncio
+import os
 from dataclasses import dataclass
 from typing import Any
-import asyncio
 
 from ossmk.core.models import ContributionEvent
 from ossmk.core.services.score import load_rules, score_events
 from ossmk.providers.github import provider as github
 from ossmk.storage.postgres import (
+    can_perform_update,
     connect as pg_connect,
     ensure_schema,
-    upsert_user,
-    can_perform_update,
-    record_update_usage,
     get_latest_total,
+    insert_growth_points,
+    record_update_usage,
     save_scores as pg_save_scores,
     save_snapshot as pg_save_snapshot,
-    insert_growth_points,
+    upsert_user,
 )
+from ossmk.utils import parse_since
 
 
 @dataclass
@@ -36,8 +38,6 @@ def analyze_github_user(
     api: str = "auto",
 ) -> AnalysisResult:
     # Clamp since for programmatic usage as well
-    import os
-    from ossmk.utils import parse_since
     try:
         max_days = int(os.getenv("OSSMK_MAX_SINCE_DAYS", "180"))
     except Exception:
@@ -62,7 +62,13 @@ def analyze_github_user(
         "total_events": len(events),
         "scores_by_dimension": by_dim,
     }
-    return AnalysisResult(user=login, events_count=len(events), events=events, scores=scores, summary=summary)
+    return AnalysisResult(
+        user=login,
+        events_count=len(events),
+        events=events,
+        scores=scores,
+        summary=summary,
+    )
 
 
 def backend_update_user(
@@ -82,7 +88,9 @@ def backend_update_user(
     with pg_connect(dsn) as conn:
         ensure_schema(conn)
         upsert_user(conn, user_id=user_id, github_login=github_login, is_paid=paid)
-        allowed, reason, used, limit = can_perform_update(conn, user_id, kind="manual" if manual else "auto")
+        allowed, reason, used, limit = can_perform_update(
+            conn, user_id, kind="manual" if manual else "auto"
+        )
         if not allowed:
             return {
                 "ok": False,
@@ -105,7 +113,9 @@ def backend_update_user(
         # points: simple delta if growth positive (can be improved later)
         delta = max(0.0, new_total - prev_total)
         if delta > 0:
-            insert_growth_points(conn, user_id, points=delta, prev_total=prev_total, new_total=new_total)
+            insert_growth_points(
+                conn, user_id, points=delta, prev_total=prev_total, new_total=new_total
+            )
         if manual:
             record_update_usage(conn, user_id, kind="manual")
 

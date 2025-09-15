@@ -65,13 +65,13 @@ def suggest_rules_from_events(events: list[dict[str, Any]], cfg: LLMConfig) -> s
     for e in events:
         k = str(e.get("kind"))
         counts[k] = counts.get(k, 0) + 1
-    content = "Please propose fair scoring rules for the following event counts as TOML.\n" + json.dumps(
-        {"counts": counts}, ensure_ascii=False
+    prefix = (
+        "Please propose fair scoring rules for the following event counts as TOML.\n"
     )
+    content = prefix + json.dumps({"counts": counts}, ensure_ascii=False)
     prov = cfg.provider.lower()
     if prov == "openai":
         return _openai_complete(cfg, content)
     if prov == "anthropic":
         return _anthropic_complete(cfg, content)
     raise ValueError(f"Unsupported LLM provider: {cfg.provider}")
-
