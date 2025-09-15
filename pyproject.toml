@@ -20,12 +20,11 @@ classifiers = [
   "Operating System :: OS Independent",
   "Typing :: Typed",
 ]
-urls = {
-  "Homepage" = "https://github.com/refactoring-my-path/oss-metrics-kit",
-  "Repository" = "https://github.com/refactoring-my-path/oss-metrics-kit",
-  "Issues" = "https://github.com/refactoring-my-path/oss-metrics-kit/issues",
-  "Documentation" = "https://github.com/refactoring-my-path/oss-metrics-kit/tree/main/docs"
-}
+[project.urls]
+Homepage = "https://github.com/refactoring-my-path/oss-metrics-kit"
+Repository = "https://github.com/refactoring-my-path/oss-metrics-kit"
+Issues = "https://github.com/refactoring-my-path/oss-metrics-kit/issues"
+Documentation = "https://github.com/refactoring-my-path/oss-metrics-kit/tree/main/docs"
 dependencies = [
   "httpx>=0.27",
   "pydantic>=2",
