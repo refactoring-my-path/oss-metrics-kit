@@ -47,6 +47,34 @@ with connect() as conn:
 - The Postgres DSN should be provided through secret envs and never committed.
 - `.gitignore` in this repo ignores typical secret files and proprietary assets.
 
+### Rate limiting and abuse protection
+
+- Use your backend’s gateway or API framework (e.g., FastAPI) to apply IP/user-based rate limiting.
+- The package provides a simple, process-local limiter example at `ossmk.security.ratelimit.RateLimiter`. For production, back it by Redis.
+
+Example with FastAPI dependency:
+
+```python
+from fastapi import Depends, HTTPException
+from ossmk.security.ratelimit import RateLimiter
+
+limiter = RateLimiter(capacity=5, window_seconds=60)
+
+def limit_user(user_id: str):
+    if not limiter.try_acquire(f"user:{user_id}"):
+        raise HTTPException(status_code=429, detail="Too Many Requests")
+
+@app.post("/analyze")
+def analyze(user_id: str, github_login: str, rules: str = "auto", since: str = "90d", _=Depends(lambda: limit_user(user_id))):
+    # call analyze_github_user or your wrapper and persist
+    ...
+```
+
+### Private rules
+
+- Store proprietary TOML rules outside the repo (e.g., `private/boostbit_rules.toml`).
+- Point `BOOSTBIT_RULES_FILE` to that path; passing `rules="default"` or `rules="auto"` will load it.
+
 ## Data model (persistence)
 
 - Table `ossmk_scores` stores per-user, per-dimension, per-window scores. The CLI/API writes here by default.
@@ -72,4 +100,3 @@ weight = 0.7
 
 - Current GitHub provider fetches issues/PRs per repo and the list of user repos (first page). For large accounts, implement pagination and parallelism as needed.
 - HTTP requests use ETag caching when possible and exponential backoff retries.
-
