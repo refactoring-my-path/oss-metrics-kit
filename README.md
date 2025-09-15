@@ -35,6 +35,41 @@ OSSの貢献データを「収集 → 正規化 → 指標算出 → 出力」�
 - `ossmk --help`（アクティベート済みの場合）
 - もしくは環境を活性化せずに: `uv run ossmk --help`
 
+## PyPIインストール（利用者向け）
+
+- 安定版のインストール: `pip install oss-metrics-kit`
+- Postgres連携込み: `pip install "oss-metrics-kit[exporters-postgres]"`
+
+インストール後に `ossmk --help` が動作すればOKです。
+
+## あなたのGitHubアカウントで試す
+
+前提: GitHubトークンを環境に設定します（read-only 権限で十分）。
+
+```bash
+export GITHUB_TOKEN=ghp_xxx   # or GH_TOKEN
+```
+
+分析（サマリ＋スコア出力）
+
+```bash
+ossmk analyze-user <your_github_login> --out -
+```
+
+スコアをPostgresに保存（任意）
+
+```bash
+export OSSMK_PG_DSN="postgresql://user:pass@host:5432/db"
+ossmk analyze-user <your_github_login> --save-pg
+```
+
+プロプライエタリな重み付け（任意）
+
+```bash
+export BOOSTBIT_RULES_FILE=/absolute/path/to/private/boostbit_rules.toml
+ossmk analyze-user <your_github_login> --out -
+```
+
 ## 使い方（概要）
 
 - バージョン表示: `ossmk version`
@@ -42,6 +77,46 @@ OSSの貢献データを「収集 → 正規化 → 指標算出 → 出力」�
 - スコア算出: `ossmk score --input input.json --rules default`
 
 詳細な実装進捗・エラーメモは `DEVLOG.md`（ローカル専用、.gitignore対象）を参照してください。
+
+## PyPI公開手順（メンテナ向け）
+
+準備
+
+- PyPIアカウント作成 → API Token発行（スコープ: Upload）。
+- ローカルでビルド&公開に使うツールを準備。
+
+uvを使う場合（推奨）
+
+```bash
+# ビルド
+uv build
+
+# TestPyPIに公開（推奨）
+export PYPI_TOKEN_TEST=...  # pypi- で始まるトークン
+uv publish --repository testpypi --token "$PYPI_TOKEN_TEST"
+
+# 本番PyPIに公開
+export PYPI_TOKEN=...
+uv publish --token "$PYPI_TOKEN"
+```
+
+twineを使う場合（代替）
+
+```bash
+python -m pip install build twine
+python -m build
+
+# TestPyPI
+twine upload --repository testpypi -u __token__ -p "$PYPI_TOKEN_TEST" dist/*
+
+# PyPI
+twine upload -u __token__ -p "$PYPI_TOKEN" dist/*
+```
+
+注意点
+
+- バージョンはSemVerで更新し、同じ版の再アップロードは不可です。
+- `pyproject.toml` のメタデータ（URL/ライセンス/説明）が公開ページに反映されます。
 
 ## 設計ハイライト
 

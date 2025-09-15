@@ -17,8 +17,8 @@ class AnalysisResult:
     summary: dict[str, Any]
 
 
-def analyze_github_user(login: str, rules: str = "default") -> AnalysisResult:
-    events: list[ContributionEvent] = github.fetch_user_contributions(login)
+def analyze_github_user(login: str, rules: str = "default", since: str | None = None) -> AnalysisResult:
+    events: list[ContributionEvent] = github.fetch_user_contributions(login, since=since)
     rs = load_rules(rules)
     scores = score_events(events, rs)
     # simple summary for FE

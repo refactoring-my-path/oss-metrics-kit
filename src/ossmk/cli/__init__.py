@@ -31,11 +31,15 @@ def fetch(
     provider: str = typer.Option("github", help="Provider id (e.g., github)"),
     repo: str = typer.Option(..., help="Target repo full name (owner/name)"),
     out: str = typer.Option("-", help="Output destination (path or - for stdout)"),
+    since: str | None = typer.Option(None, help="Time window filter, e.g., '30d' or ISO-8601"),
 ) -> None:
     """Fetch contribution data and output normalized events as JSON."""
     if provider != "github":
         raise typer.BadParameter("Only 'github' provider is currently supported")
-    events = github_provider.fetch_repo_issues_and_prs(repo)
+    events = []
+    events.extend(github_provider.fetch_repo_issues_and_prs(repo))
+    events.extend(github_provider.fetch_repo_commits(repo, since=since))
+    events.extend(github_provider.fetch_repo_pr_reviews(repo))
     write_json([e.model_dump() for e in events], out=out)
 
 
@@ -67,9 +71,10 @@ def analyze_user(
     out: str = typer.Option("-", help="Output destination (path or - for stdout)"),
     save_pg: bool = typer.Option(False, help="Save events and scores to Postgres"),
     pg_dsn: str | None = typer.Option(None, help="Postgres DSN (overrides env)"),
+    since: str | None = typer.Option("90d", help="Time window filter for commits, e.g., '90d'"),
 ) -> None:
     """Analyze a GitHub user: fetch -> score -> output, optionally persist to Postgres."""
-    result = analyze_github_user(login, rules=rules)
+    result = analyze_github_user(login, rules=rules, since=since)
     # output
     write_json({
         "user": result.user,

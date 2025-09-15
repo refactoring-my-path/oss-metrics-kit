@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import structlog
@@ -42,3 +42,34 @@ def http_client() -> httpx.Client:
 )
 def http_get(client: httpx.Client, url: str, headers: dict[str, str]) -> httpx.Response:
     return client.get(url, headers=headers)
+
+
+def parse_since(since: str | None) -> str | None:
+    """Accept ISO-8601 or relative like '30d', '12h'. Return ISO string (UTC)."""
+    if not since:
+        return None
+    s = since.strip().lower()
+    if s.endswith("d") and s[:-1].isdigit():
+        days = int(s[:-1])
+        dt = datetime.now(timezone.utc) - timedelta(days=days)
+        return dt.isoformat()
+    if s.endswith("h") and s[:-1].isdigit():
+        hours = int(s[:-1])
+        dt = datetime.now(timezone.utc) - timedelta(hours=hours)
+        return dt.isoformat()
+    # fall back: assume ISO input
+    return s
+
+
+def parse_link_next(link_header: str | None) -> str | None:
+    if not link_header:
+        return None
+    # format: <url1>; rel="next", <url2>; rel="last"
+    parts = [p.strip() for p in link_header.split(",")]
+    for p in parts:
+        if 'rel="next"' in p:
+            start = p.find("<")
+            end = p.find(">", start + 1)
+            if start != -1 and end != -1:
+                return p[start + 1 : end]
+    return None
