@@ -7,7 +7,7 @@ from typing import Iterable, Any, TypedDict, cast
 import tomllib
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from ossmk.core.models import ContributionEvent
 
 
@@ -142,7 +142,7 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[Sc
                 # apply decay by event age
                 if getattr(ev, "created_at", None):
                     try:
-                        age_days = (datetime.now(timezone.utc) - ev.created_at).total_seconds() / 86400.0
+                        age_days = (datetime.now(UTC) - ev.created_at).total_seconds() / 86400.0
                         if decay_mode == "exponential" and lam > 0:
                             w *= exp(-lam * age_days)
                         elif decay_mode == "linear" and window_days > 0:

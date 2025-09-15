@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Iterable
 
 import psycopg
@@ -11,7 +11,7 @@ from .base import StorageBackend
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def get_dsn(explicit: str | None = None) -> str:
