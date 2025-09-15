@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from ossmk.core.services.score import load_rules, RuleSet
 
 
-@dataclass
-class RuleSet:
-    """Placeholder rule set type for entry points."""
+def default_rules() -> RuleSet:  # entry point target
+    return load_rules("default")
 
-
-default_rules = RuleSet()
-
+__all__ = ["default_rules", "RuleSet"]

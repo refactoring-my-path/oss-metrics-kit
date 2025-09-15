@@ -1,4 +1,3 @@
 def exporter(*args, **kwargs):  # noqa: ANN001, D401
-    """Placeholder Stdout exporter."""
+    """Stdout exporter (legacy shim)."""
     return {"status": "stub", "format": "stdout"}
-

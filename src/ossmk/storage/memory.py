@@ -1,8 +1,7 @@
 class MemoryBackend:
-    """Placeholder in-memory backend."""
+    """In-memory marker backend (not for production)."""
 
     name = "memory"
 
 
 backend = MemoryBackend()
-

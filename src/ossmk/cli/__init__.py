@@ -18,6 +18,7 @@ from ossmk.providers.github import provider as github_provider
 from ossmk.core.services.score import score_events, load_rules
 from ossmk.core.services.analyze import analyze_github_user
 from ossmk.storage.base import open_backend
+from ossmk.core.rules.llm import LLMConfig, suggest_rules_from_events
 from ossmk.core.models import ContributionEvent
 
 app = typer.Typer(help="OSS Metrics Kit CLI")
@@ -122,14 +123,21 @@ def save(
         rprint({"saved": len(scores), "backend": dsn.split(":", 1)[0]})
     finally:
         backend.close()
-    # optional persistence
-    if save_pg:
-        with pg_connect(pg_dsn) as conn:
-            ensure_schema(conn)
-            # save events and scores
-            try:
-                save_events(conn, result.events)
-            except Exception:
-                # events saving is best-effort; continue with scores
-                pass
-            save_scores(conn, result.scores)
+
+
+@app.command("rules-llm")
+def rules_llm(
+    input: str = typer.Option("-", help="Input events JSON (from fetch or analyze-user --out -)"),
+    provider: str = typer.Option("openai", help="LLM provider: openai|anthropic"),
+    model: str = typer.Option("gpt-4o-mini", help="Model id for the provider"),
+    api_key: str | None = typer.Option(None, help="API key (or use env)"),
+    out: str = typer.Option("rules.toml", help="Output TOML path"),
+) -> None:
+    """Suggest a rule TOML using an LLM from input events statistics."""
+    payload = _read_json_input(input)
+    events = payload if isinstance(payload, list) else payload.get("events", payload)
+    cfg = LLMConfig(provider=provider, model=model, api_key=api_key)
+    toml_text = suggest_rules_from_events(events, cfg)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(toml_text)
+    rprint({"rules": out})
