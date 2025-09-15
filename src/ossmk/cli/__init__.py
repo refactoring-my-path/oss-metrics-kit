@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - optional
 from ossmk.providers.github import provider as github_provider
 from ossmk.core.services.score import score_events, load_rules
 from ossmk.core.services.analyze import analyze_github_user
-from ossmk.storage.postgres import connect as pg_connect, ensure_schema, save_events, save_scores
+from ossmk.storage.base import open_backend
 from ossmk.core.models import ContributionEvent
 
 app = typer.Typer(help="OSS Metrics Kit CLI")
@@ -105,6 +105,23 @@ def analyze_user(
         rprint({"summary": result.summary, "scores_parquet": out.split(":", 1)[1]})
     else:
         write_json(obj, out=out)
+
+
+@app.command("save")
+def save(
+    dsn: str = typer.Argument(..., help="Storage DSN (e.g., postgresql://... or sqlite:///path.db)"),
+    input: str = typer.Option("-", help="Input path for scores JSON (from analyze-user)"),
+) -> None:
+    """Persist scores (and optionally events later) to the selected storage backend."""
+    payload = _read_json_input(input)
+    scores = payload if isinstance(payload, list) else payload.get("scores", [])
+    backend = open_backend(dsn)
+    try:
+        backend.ensure_schema()
+        backend.save_scores(scores)
+        rprint({"saved": len(scores), "backend": dsn.split(":", 1)[0]})
+    finally:
+        backend.close()
     # optional persistence
     if save_pg:
         with pg_connect(pg_dsn) as conn:
