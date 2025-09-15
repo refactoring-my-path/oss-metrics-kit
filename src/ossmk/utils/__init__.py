@@ -7,6 +7,7 @@ import asyncio
 import httpx
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from dateutil import parser as dateutil_parser
 
 
 def get_logger() -> structlog.stdlib.BoundLogger:
@@ -62,8 +63,11 @@ async def http_get_async(client: httpx.AsyncClient, url: str, headers: dict[str,
     return resp
 
 
-def parse_since(since: str | None) -> str | None:
-    """Accept ISO-8601 or relative like '30d', '12h'. Return ISO string (UTC)."""
+def parse_since(since: str | None, max_days: int | None = 180) -> str | None:
+    """Accept ISO-8601 or relative like '30d', '12h'. Return ISO string (UTC).
+
+    If max_days is set, clamp the earliest date to now - max_days.
+    """
     if not since:
         return None
     s = since.strip().lower()
@@ -75,8 +79,19 @@ def parse_since(since: str | None) -> str | None:
         hours = int(s[:-1])
         dt = datetime.now(timezone.utc) - timedelta(hours=hours)
         return dt.isoformat()
-    # fall back: assume ISO input
-    return s
+    # ISO input
+    try:
+        dt = dateutil_parser.isoparse(s)
+        if not dt.tzinfo:
+            dt = dt.replace(tzinfo=timezone.utc)
+        # clamp
+        if max_days is not None:
+            earliest = datetime.now(timezone.utc) - timedelta(days=max_days)
+            if dt < earliest:
+                dt = earliest
+        return dt.isoformat()
+    except Exception:
+        return s
 
 
 def parse_link_next(link_header: str | None) -> str | None:

@@ -39,8 +39,8 @@ async def analyze(user_id: str, github_login: str, rules: str = "auto", since: s
 
 ## Private rules
 
-- Place TOML at `private/boostbit_rules.toml` (outside git).
-- Set `BOOSTBIT_RULES_FILE=/abs/path/to/private/boostbit_rules.toml`.
+- Place TOML at `private/ossmk_rules.toml` (outside git).
+- Set `OSSMK_RULES_FILE=/abs/path/to/private/rules.toml`.
 - Call with `rules="auto"` or `rules="default"` to load proprietary weights.
 
 ## Security checklist
@@ -53,4 +53,3 @@ async def analyze(user_id: str, github_login: str, rules: str = "auto", since: s
 ```text
 This file is a template and is not intended to be committed.
 ```
-

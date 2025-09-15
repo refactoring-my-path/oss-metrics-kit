@@ -285,42 +285,46 @@ class GitHubProvider:
     ) -> list[ContributionEvent]:
         url = "https://api.github.com/graphql"
         headers = self._auth_headers()
+        # Cursor-paginated search for PRs and Issues authored by login
         query = (
-            "query($login:String!){"
-            "prs: search(type: ISSUE, query: \"is:pr author:" + login + "\", first: 100) { nodes { ... on PullRequest { id number repository { nameWithOwner } author { login } createdAt } } }"
-            "issues: search(type: ISSUE, query: \"is:issue author:" + login + "\", first: 100) { nodes { ... on Issue { id number repository { nameWithOwner } author { login } createdAt } } }"
+            "query($q:String!, $after:String){"
+            "  search(type: ISSUE, query: $q, first: 100, after: $after){"
+            "    pageInfo{ hasNextPage endCursor }"
+            "    nodes {"
+            "      ... on PullRequest { id number repository { nameWithOwner } author { login } createdAt }"
+            "      ... on Issue { id number repository { nameWithOwner } author { login } createdAt }"
+            "    }"
+            "  }"
             "}"
         )
-        async with http_async_client() as client:
-            resp = await client.post(url, headers=headers, json={"query": query, "variables": {"login": login}})
-            resp.raise_for_status()
-            data = resp.json().get("data") or {}
+        q_base = f"author:{login} is:public"
         events: list[ContributionEvent] = []
-        for pr in (data.get("prs", {}).get("nodes") or []):
-            repo = (pr.get("repository") or {}).get("nameWithOwner") or "unknown/unknown"
-            events.append(
-                ContributionEvent(
-                    id=str(pr.get("id")),
-                    kind=EventKind.pr,
-                    repo_id=f"github.com/{repo}",
-                    user_id=str(((pr.get("author") or {}).get("login")) or login),
-                    created_at=pr.get("createdAt"),
-                    lines_added=0,
-                    lines_removed=0,
-                )
-            )
-        for isu in (data.get("issues", {}).get("nodes") or []):
-            repo = (isu.get("repository") or {}).get("nameWithOwner") or "unknown/unknown"
-            events.append(
-                ContributionEvent(
-                    id=str(isu.get("id")),
-                    kind=EventKind.issue,
-                    repo_id=f"github.com/{repo}",
-                    user_id=str(((isu.get("author") or {}).get("login")) or login),
-                    created_at=isu.get("createdAt"),
-                    lines_added=0,
-                    lines_removed=0,
-                )
-            )
+        async with http_async_client() as client:
+            after = None
+            while True:
+                payload = {"query": query, "variables": {"q": q_base, "after": after}}
+                resp = await client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json().get("data") or {}
+                search = data.get("search") or {}
+                nodes = search.get("nodes") or []
+                for n in nodes:
+                    repo = (n.get("repository") or {}).get("nameWithOwner") or "unknown/unknown"
+                    is_pr = "number" in n and (n.get("__typename", "") == "PullRequest" or "id" in n)
+                    kind = EventKind.pr if "PullRequest" in str(n) else (EventKind.issue)
+                    events.append(
+                        ContributionEvent(
+                            id=str(n.get("id")),
+                            kind=kind,
+                            repo_id=f"github.com/{repo}",
+                            user_id=str(((n.get("author") or {}).get("login")) or login),
+                            created_at=n.get("createdAt"),
+                            lines_added=0,
+                            lines_removed=0,
+                        )
+                    )
+                page = search.get("pageInfo") or {}
+                if not page.get("hasNextPage"):
+                    break
+                after = page.get("endCursor")
         return events
-
