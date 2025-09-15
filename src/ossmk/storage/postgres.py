@@ -7,6 +7,7 @@ from typing import Iterable
 import psycopg
 
 from ossmk.core.models import ContributionEvent
+from .base import StorageBackend
 
 
 def _now() -> datetime:
@@ -65,7 +66,7 @@ def save_events(conn: psycopg.Connection, events: Iterable[ContributionEvent]) -
     if not rows:
         return 0
     with conn.cursor() as cur:
-        cur.execute(
+        cur.executemany(
             """
             INSERT INTO ossmk_events (id, kind, repo_id, user_id, created_at, lines_added, lines_removed, source_host)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
@@ -83,7 +84,7 @@ def save_scores(conn: psycopg.Connection, scores: list[dict]) -> int:
     if not rows:
         return 0
     with conn.cursor() as cur:
-        cur.execute(
+        cur.executemany(
             """
             INSERT INTO ossmk_scores (user_id, dimension, value, window, generated_at)
             VALUES (%s,%s,%s,%s, now())
@@ -96,6 +97,26 @@ def save_scores(conn: psycopg.Connection, scores: list[dict]) -> int:
     return len(rows)
 
 
+class PostgresBackend(StorageBackend):
+    def __init__(self, dsn: str) -> None:
+        self._dsn = dsn
+        self._conn = psycopg.connect(dsn)
+
+    def ensure_schema(self) -> None:
+        ensure_schema(self._conn)
+
+    def save_events(self, events: Iterable[ContributionEvent]) -> int:
+        return save_events(self._conn, events)
+
+    def save_scores(self, scores: list[dict]) -> int:
+        return save_scores(self._conn, scores)
+
+    def close(self) -> None:
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+
 def connect(dsn: str | None = None) -> psycopg.Connection:
     return psycopg.connect(get_dsn(dsn))
-

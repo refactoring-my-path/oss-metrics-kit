@@ -1,6 +1,6 @@
 # oss-metrics-kit
 
-OSSの貢献データを「収集 → 正規化 → 指標算出 → 出力」まで一気通貫で扱うための基盤ライブラリ（MVP）。
+OSSの貢献データを「収集 → 正規化 → 指標算出 → 出力」まで一気通貫で扱うための基盤ライブラリ。
 
 現状: スタブ実装（CLI/エントリポイント/型モデルのみ）。ここから段階的に機能を追加します。
 
@@ -73,10 +73,11 @@ ossmk analyze-user <your_github_login> --out -
 ## 使い方（概要）
 
 - バージョン表示: `ossmk version`
-- データ取得: `ossmk fetch --provider github --repo owner/name`
-- スコア算出: `ossmk score --input input.json --rules default`
+- GitHubユーザーを分析（並列取得・since/GraphQL対応）: `ossmk analyze-user <login> --since 90d --api auto --out -`
+- 単一リポのイベント取得: `ossmk fetch --provider github --repo owner/name --since 30d --out -`
+- スコア保存（DB切替え可能）: `ossmk save postgresql://... --input scores.json` または `ossmk save sqlite:///./metrics.db --input scores.json`
 
-詳細な実装進捗・エラーメモは `DEVLOG.md`（ローカル専用、.gitignore対象）を参照してください。
+ストレージはDSNで切り替え（Postgres/SQLite）。Parquetはオプション機能（分析用）です。
 
 ## PyPI公開手順（メンテナ向け）
 
