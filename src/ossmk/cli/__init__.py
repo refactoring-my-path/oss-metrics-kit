@@ -11,6 +11,8 @@ from rich import print as rprint
 from ossmk.exporters.json import write_json
 from ossmk.providers.github import provider as github_provider
 from ossmk.core.services.score import score_events, load_rules
+from ossmk.core.services.analyze import analyze_github_user
+from ossmk.storage.postgres import connect as pg_connect, ensure_schema, save_events, save_scores
 from ossmk.core.models import ContributionEvent
 
 app = typer.Typer(help="OSS Metrics Kit CLI")
@@ -56,3 +58,33 @@ def score(
     rule_set = load_rules(rules)
     result = score_events(events, rule_set)
     write_json(result, out=out)
+
+
+@app.command("analyze-user")
+def analyze_user(
+    login: str = typer.Argument(..., help="GitHub login"),
+    rules: str = typer.Option("default", help="Rule set id or TOML file path"),
+    out: str = typer.Option("-", help="Output destination (path or - for stdout)"),
+    save_pg: bool = typer.Option(False, help="Save events and scores to Postgres"),
+    pg_dsn: str | None = typer.Option(None, help="Postgres DSN (overrides env)"),
+) -> None:
+    """Analyze a GitHub user: fetch -> score -> output, optionally persist to Postgres."""
+    result = analyze_github_user(login, rules=rules)
+    # output
+    write_json({
+        "user": result.user,
+        "events_count": result.events_count,
+        "scores": result.scores,
+        "summary": result.summary,
+    }, out=out)
+    # optional persistence
+    if save_pg:
+        with pg_connect(pg_dsn) as conn:
+            ensure_schema(conn)
+            # save events and scores
+            try:
+                save_events(conn, result.events)
+            except Exception:
+                # events saving is best-effort; continue with scores
+                pass
+            save_scores(conn, result.scores)

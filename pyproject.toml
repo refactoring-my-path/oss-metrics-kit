@@ -34,6 +34,7 @@ dependencies = [
 exporters-parquet = ["pyarrow>=15"]
 storage-duckdb = ["duckdb>=1.0", "pyarrow>=15"]
 all = ["pyarrow>=15", "duckdb>=1.0"]
+exporters-postgres = ["psycopg[binary]>=3.2"]
 
 [project.scripts]
 ossmk = "ossmk.cli:app"
