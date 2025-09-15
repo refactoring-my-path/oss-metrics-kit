@@ -6,18 +6,24 @@ from dataclasses import dataclass
 from typing import Any
 
 from ossmk.core.models import ContributionEvent
-from ossmk.core.services.score import load_rules, score_events
+from ossmk.core.services.score import ScoreEntry, load_rules, score_events
 from ossmk.providers.github import provider as github
 from ossmk.storage.postgres import (
     can_perform_update,
-    connect as pg_connect,
     ensure_schema,
     get_latest_total,
     insert_growth_points,
     record_update_usage,
-    save_scores as pg_save_scores,
-    save_snapshot as pg_save_snapshot,
     upsert_user,
+)
+from ossmk.storage.postgres import (
+    connect as pg_connect,
+)
+from ossmk.storage.postgres import (
+    save_scores as pg_save_scores,
+)
+from ossmk.storage.postgres import (
+    save_snapshot as pg_save_snapshot,
 )
 from ossmk.utils import parse_since
 
@@ -27,7 +33,7 @@ class AnalysisResult:
     user: str
     events_count: int
     events: list[ContributionEvent]
-    scores: list[dict]
+    scores: list[ScoreEntry]
     summary: dict[str, Any]
 
 

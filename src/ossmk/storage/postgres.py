@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from datetime import UTC, datetime
-import os
+from typing import Any, cast
 
-import psycopg
+try:  # optional dependency at runtime
+    import psycopg  # type: ignore[reportMissingImports]
+except Exception:  # pragma: no cover
+    psycopg = None  # type: ignore[assignment]
+
+from ossmk.core.models import ContributionEvent
 
 from .base import StorageBackend
-from ossmk.core.models import ContributionEvent
 
 
 def _now() -> datetime:
@@ -23,7 +28,7 @@ def get_dsn(explicit: str | None = None) -> str:
     return env
 
 
-def ensure_schema(conn: psycopg.Connection) -> None:
+def ensure_schema(conn: Any) -> None:
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -49,7 +54,7 @@ def ensure_schema(conn: psycopg.Connection) -> None:
         )
 
 
-def save_events(conn: psycopg.Connection, events: Iterable[ContributionEvent]) -> int:
+def save_events(conn: Any, events: Iterable[ContributionEvent]) -> int:
     rows = [
         (
             e.id,
@@ -86,9 +91,15 @@ def save_events(conn: psycopg.Connection, events: Iterable[ContributionEvent]) -
     return len(rows)
 
 
-def save_scores(conn: psycopg.Connection, scores: list[dict]) -> int:
+def save_scores(conn: Any, scores: list[dict[str, object]]) -> int:
     rows = [
-        (s["user_id"], s["dimension"], float(s["value"]), s.get("window", "all")) for s in scores
+        (
+            cast(str, s["user_id"]),
+            cast(str, s["dimension"]),
+            float(cast(object, s["value"])),
+            cast(str, s.get("window", "all")),
+        )
+        for s in scores
     ]
     if not rows:
         return 0
@@ -109,7 +120,8 @@ def save_scores(conn: psycopg.Connection, scores: list[dict]) -> int:
 class PostgresBackend(StorageBackend):
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
-        self._conn = psycopg.connect(dsn)
+        # psycopg may be optional during static analysis
+        self._conn: Any = psycopg.connect(dsn) if psycopg is not None else None
 
     def ensure_schema(self) -> None:
         ensure_schema(self._conn)
@@ -117,7 +129,7 @@ class PostgresBackend(StorageBackend):
     def save_events(self, events: Iterable[ContributionEvent]) -> int:
         return save_events(self._conn, events)
 
-    def save_scores(self, scores: list[dict]) -> int:
+    def save_scores(self, scores: list[dict[str, object]]) -> int:
         return save_scores(self._conn, scores)
 
     def close(self) -> None:
@@ -127,5 +139,7 @@ class PostgresBackend(StorageBackend):
             pass
 
 
-def connect(dsn: str | None = None) -> psycopg.Connection:
+def connect(dsn: str | None = None) -> Any:
+    if psycopg is None:  # pragma: no cover
+        raise RuntimeError("psycopg is not installed")
     return psycopg.connect(get_dsn(dsn))

@@ -6,7 +6,6 @@ Prefer environment variables for secrets and tokens.
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -16,5 +15,5 @@ def env_bool(name: str, default: bool = False) -> bool:
     return val.lower() in {"1", "true", "yes", "on"}
 
 
-def env_str(name: str, default: Optional[str] = None) -> Optional[str]:
+def env_str(name: str, default: str | None = None) -> str | None:
     return os.getenv(name, default)

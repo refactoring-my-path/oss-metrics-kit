@@ -2,23 +2,21 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
-
-from ..services.score import RuleSet
+from typing import Any, cast
 
 
 @dataclass
 class LLMConfig:
     provider: str  # 'openai' | 'anthropic' | 'azure-openai'
     model: str
-    api_key: Optional[str] = None
-    endpoint: Optional[str] = None  # for Azure
+    api_key: str | None = None
+    endpoint: str | None = None  # for Azure
 
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant that designs fair scoring rules for OSS contributions. "
-    "Return a minimal TOML with [dimensions.<name>] having 'kinds', 'weight', and optional 'weights_by_kind'. "
-    "Also add [fairness.clip_per_user_day] with daily caps per kind."
+    "Return a minimal TOML with [dimensions.<name>] having 'kinds', 'weight', and "
+    "optional 'weights_by_kind'. Also add [fairness.clip_per_user_day] with daily caps per kind."
 )
 
 
@@ -26,14 +24,19 @@ def _openai_complete(cfg: LLMConfig, content: str) -> str:
     try:
         from openai import OpenAI  # type: ignore
     except Exception as e:  # pragma: no cover
-        raise RuntimeError("OpenAI client not installed. pip install 'oss-metrics-kit[llm-openai]'") from e
-    client = OpenAI(api_key=cfg.api_key)
-    resp = client.chat.completions.create(
+        raise RuntimeError(
+            "OpenAI client not installed. pip install 'oss-metrics-kit[llm-openai]'"
+        ) from e
+    client: Any = OpenAI(api_key=cfg.api_key)
+    resp: Any = client.chat.completions.create(
         model=cfg.model,
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": content}],
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": content},
+        ],
         temperature=0.2,
     )
-    return resp.choices[0].message.content or ""
+    return cast(str, resp.choices[0].message.content or "")
 
 
 def _anthropic_complete(cfg: LLMConfig, content: str) -> str:
@@ -43,8 +46,8 @@ def _anthropic_complete(cfg: LLMConfig, content: str) -> str:
         raise RuntimeError(
             "Anthropic client not installed. pip install 'oss-metrics-kit[llm-anthropic]'"
         ) from e
-    client = anthropic.Anthropic(api_key=cfg.api_key)
-    msg = client.messages.create(
+    client: Any = anthropic.Anthropic(api_key=cfg.api_key)
+    msg: Any = client.messages.create(
         model=cfg.model,
         max_tokens=1000,
         temperature=0.2,
@@ -52,7 +55,7 @@ def _anthropic_complete(cfg: LLMConfig, content: str) -> str:
         messages=[{"role": "user", "content": content}],
     )
     # anthropic returns list of content blocks
-    return "".join(block.text for block in msg.content)
+    return "".join(cast(Any, block).text for block in msg.content)
 
 
 def suggest_rules_from_events(events: list[dict[str, Any]], cfg: LLMConfig) -> str:

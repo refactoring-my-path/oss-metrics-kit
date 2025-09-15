@@ -16,7 +16,7 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    def save_scores(self, scores: list[dict]) -> int:
+    def save_scores(self, scores: list[dict[str, object]]) -> int:
         ...
 
     @abstractmethod

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import os
+import tomllib
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from math import exp, log
 from typing import Any, TypedDict, cast
-
-import tomllib
 
 from ossmk.core.models import ContributionEvent
 

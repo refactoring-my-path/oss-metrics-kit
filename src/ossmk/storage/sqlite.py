@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import os
+import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-import os
-import sqlite3
 from typing import Any
 
-from .base import StorageBackend
 from ossmk.core.models import ContributionEvent
+
+from .base import StorageBackend
 
 
 def _default_cache_path() -> Path:
@@ -151,7 +152,7 @@ class SQLiteStorage(StorageBackend):
             )
         return len(rows)
 
-    def save_scores(self, scores: list[dict]) -> int:
+    def save_scores(self, scores: list[dict[str, Any]]) -> int:
         rows = [
             (
                 s["user_id"],

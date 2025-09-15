@@ -1,26 +1,25 @@
 from __future__ import annotations
 
-import io
 import json
 import sys
-from typing import Any
+from typing import Any, cast
 
 import typer
 from rich import print as rprint
 
 from ossmk.exporters.json import write_json
-from typing import Optional
+
 try:
     from ossmk.exporters.parquet import write_parquet
 except Exception:  # pragma: no cover - optional
     write_parquet = None  # type: ignore
-from ossmk.providers.github import provider as github_provider
-from ossmk.core.services.score import score_events, load_rules
-from ossmk.core.services.analyze import analyze_github_user
-from ossmk.storage.base import open_backend
-from ossmk.core.rules.llm import LLMConfig, suggest_rules_from_events
-from ossmk.utils import parse_since
 from ossmk.core.models import ContributionEvent
+from ossmk.core.rules.llm import LLMConfig, suggest_rules_from_events
+from ossmk.core.services.analyze import analyze_github_user
+from ossmk.core.services.score import load_rules, score_events
+from ossmk.providers.github import provider as github_provider
+from ossmk.storage.base import open_backend
+from ossmk.utils import parse_since
 
 app = typer.Typer(help="OSS Metrics Kit CLI")
 
@@ -44,16 +43,19 @@ def fetch(
     """Fetch contribution data and output normalized events as JSON."""
     if provider != "github":
         raise typer.BadParameter("Only 'github' provider is currently supported")
-    events = []
+    events: list[ContributionEvent] = []
     if api in ("rest", "auto"):
         events.extend(github_provider.fetch_repo_issues_and_prs(repo))
         events.extend(github_provider.fetch_repo_commits(repo, since=since))
         events.extend(github_provider.fetch_repo_pr_reviews(repo))
     # graphql path for repo-scope is non-trivial; kept for user-scope below.
-    payload = [e.model_dump() for e in events]
+    payload: list[dict[str, Any]] = [e.model_dump() for e in events]
     if out.startswith("parquet:"):
         if not write_parquet:
-            raise typer.BadParameter("Parquet support requires 'pyarrow'. Install extras: pip install 'oss-metrics-kit[exporters-parquet]'")
+            raise typer.BadParameter(
+                "Parquet support requires 'pyarrow'. Install extras: "
+                "pip install 'oss-metrics-kit[exporters-parquet]'"
+            )
         write_parquet(payload, out.split(":", 1)[1])
     else:
         write_json(payload, out=out)
@@ -62,7 +64,7 @@ def fetch(
 def _read_json_input(path: str) -> Any:
     if path == "-":
         return json.load(sys.stdin)
-    with io.open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -99,7 +101,7 @@ def analyze_user(
     _ = parse_since(since, max_days=180)
     result = analyze_github_user(login, rules=rules, since=since, api=api)
     # output
-    obj = {
+    obj: dict[str, Any] = {
         "user": result.user,
         "events_count": result.events_count,
         "scores": result.scores,
@@ -107,9 +109,12 @@ def analyze_user(
     }
     if out.startswith("parquet:"):
         if not write_parquet:
-            raise typer.BadParameter("Parquet support requires 'pyarrow'. Install extras: pip install 'oss-metrics-kit[exporters-parquet]'")
+            raise typer.BadParameter(
+                "Parquet support requires 'pyarrow'. Install extras: "
+                "pip install 'oss-metrics-kit[exporters-parquet]'"
+            )
         # For Parquet, we write scores table and still print summary to stdout for quick feedback.
-        write_parquet(result.scores, out.split(":", 1)[1])
+        write_parquet(cast(list[dict[str, Any]], result.scores), out.split(":", 1)[1])
         rprint({"summary": result.summary, "scores_parquet": out.split(":", 1)[1]})
     else:
         write_json(obj, out=out)
@@ -122,7 +127,11 @@ def save(
 ) -> None:
     """Persist scores (and optionally events later) to the selected storage backend."""
     payload = _read_json_input(input)
-    scores = payload if isinstance(payload, list) else payload.get("scores", [])
+    scores: list[dict[str, Any]]
+    if isinstance(payload, list):
+        scores = payload  # type: ignore[assignment]
+    else:
+        scores = payload.get("scores", [])
     backend = open_backend(dsn)
     try:
         backend.ensure_schema()
@@ -150,12 +159,22 @@ def rules_llm(
     rprint({"rules": out})
 
 
+RULES_TEST_EVENTS = typer.Option(..., help="Input events JSON path")
+RULES_TEST_RULES = typer.Option("default", help="Rule set id or TOML file path")
+RULES_TEST_TOTAL_MIN = typer.Option(None, help="Assert sum(scores) >= value")
+RULES_TEST_EXPECT_DIM = typer.Option(
+    None,
+    help="Assertions like code>=10; multiple allowed",
+    rich_help_panel="Expectations",
+)
+
+
 @app.command("rules-test")
 def rules_test(
-    events: str = typer.Option(..., help="Input events JSON path"),
-    rules: str = typer.Option("default", help="Rule set id or TOML file path"),
-    expect_total_min: float | None = typer.Option(None, help="Assert sum(scores) >= value"),
-    expect_dim: list[str] = typer.Option(None, help="Assertions like code>=10; multiple allowed", rich_help_panel="Expectations"),
+    events: str = RULES_TEST_EVENTS,
+    rules: str = RULES_TEST_RULES,
+    expect_total_min: float | None = RULES_TEST_TOTAL_MIN,
+    expect_dim: list[str] = RULES_TEST_EXPECT_DIM,
 ) -> None:
     """Test rules against sample events with simple assertions."""
     data = _read_json_input(events)
