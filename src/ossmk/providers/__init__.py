@@ -1,0 +1,2 @@
+# Provider adapter registry (placeholder)
+

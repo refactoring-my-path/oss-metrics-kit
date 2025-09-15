@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oss-metrics-kit"
+version = "0.0.1"
+description = "Unified toolkit to fetch, normalize, score, and export OSS contribution metrics."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "refactoring-my-path" },
+]
+keywords = ["oss", "metrics", "github", "scoring", "parquet", "cli"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Typing :: Typed",
+]
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2",
+  "typer>=0.12",
+  "tenacity>=8.2",
+  "rich>=13",
+  "python-dateutil>=2.8.2",
+  "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+exporters-parquet = ["pyarrow>=15"]
+storage-duckdb = ["duckdb>=1.0", "pyarrow>=15"]
+all = ["pyarrow>=15", "duckdb>=1.0"]
+
+[project.scripts]
+ossmk = "ossmk.cli:app"
+
+[project.entry-points."ossmk.providers"]
+github = "ossmk.providers.github:provider"
+
+[project.entry-points."ossmk.exporters"]
+json = "ossmk.exporters.json:exporter"
+stdout = "ossmk.exporters.stdout:exporter"
+
+[project.entry-points."ossmk.storage"]
+sqlite = "ossmk.storage.sqlite:backend"
+memory = "ossmk.storage.memory:backend"
+
+[project.entry-points."ossmk.rules"]
+default = "ossmk.core.rules:default_rules"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ossmk"]
+include = ["src/ossmk/py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+lint.select = ["E", "F", "W", "I", "UP", "B"]
+lint.ignore = []
+format.quote-style = "single"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+markers = [
+  "slow: marks tests as slow to run",
+]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+reportUnusedImport = "warning"
+reportUnusedIgnore = "warning"
+reportMissingTypeStubs = "warning"
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=8",
+  "ruff>=0.5",
+  "pyright>=1.1",
+  "coverage[toml]>=7.5",
+]
