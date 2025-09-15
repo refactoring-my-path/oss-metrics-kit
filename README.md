@@ -74,6 +74,7 @@ ossmk analyze-user <your_github_login> --out -
 
 - バージョン表示: `ossmk version`
 - GitHubユーザーを分析（並列取得・since/GraphQL対応）: `ossmk analyze-user <login> --since 90d --api auto --out -`
+- `<login>` は GitHub のユーザー名（プロフィールURLが `https://github.com/<login>` の `<login>` 部分。例: `torvalds`, `octocat`, `refactoring-my-path`）
 - 単一リポのイベント取得: `ossmk fetch --provider github --repo owner/name --since 30d --out -`
 - スコア保存（DB切替え可能）: `ossmk save postgresql://... --input scores.json` または `ossmk save sqlite:///./metrics.db --input scores.json`
 
@@ -84,6 +85,15 @@ ossmk analyze-user <your_github_login> --out -
 - ルール提案: `ossmk rules-llm --input events.json --provider openai --model gpt-4o-mini --out rules.toml`
 - 必要なエクストラ: `pip install "oss-metrics-kit[llm-openai]"` または `oss-metrics-kit[llm-anthropic]`
 - 詳細: `docs/LLM_RULES.md`
+
+## セキュリティと運用の要点
+
+- トークンは環境変数（`GITHUB_TOKEN`/`GH_TOKEN`）で管理し、ログに出さない。
+- レート制限はバックエンドの責務。例として `ossmk.security.ratelimit.RateLimiter` を提供（本番はRedis等で共有化）。
+- 私有ルール（TOML）はリポ外に保管し、`BOOSTBIT_RULES_FILE` で指定。`rules=auto|default` で自動ロード。
+- 依存はエクストラで分離（Postgres/Parquet/LLM）。最小構成で運用可能。
+
+バックエンド統合の詳細は `docs/INTEGRATION.md` を参照。
 
 ## PyPI公開手順（メンテナ向け）
 

@@ -30,7 +30,7 @@ def _default_rules() -> RuleSet:
 
 def load_rules(rules: str) -> RuleSet:
     # if 'default' use built-in; else if file path endswith .toml, parse; else use built-in
-    if rules == "default":
+    if rules in ("default", "auto"):
         env_path = os.getenv("BOOSTBIT_RULES_FILE") or os.getenv("OSSMK_RULES_FILE")
         if env_path and os.path.exists(env_path):
             rules = env_path
