@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+import asyncio
 
 from ossmk.core.models import ContributionEvent
 from ossmk.core.services.score import load_rules, score_events
@@ -17,8 +18,19 @@ class AnalysisResult:
     summary: dict[str, Any]
 
 
-def analyze_github_user(login: str, rules: str = "default", since: str | None = None) -> AnalysisResult:
-    events: list[ContributionEvent] = github.fetch_user_contributions(login, since=since)
+def analyze_github_user(
+    login: str,
+    rules: str = "default",
+    since: str | None = None,
+    api: str = "auto",
+) -> AnalysisResult:
+    if api == "rest":
+        events: list[ContributionEvent] = github.fetch_user_contributions(login, since=since)
+    elif api == "graphql":
+        events = asyncio.run(github.fetch_user_contributions_graphql_async(login, since=since))
+    else:
+        # auto: parallel REST for breadth and speed
+        events = asyncio.run(github.fetch_user_contributions_async(login, since=since))
     rs = load_rules(rules)
     scores = score_events(events, rs)
     # simple summary for FE

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+import asyncio
 
 import httpx
 import structlog
@@ -34,6 +35,10 @@ def http_client() -> httpx.Client:
     return httpx.Client(timeout=30.0, headers={"User-Agent": "ossmk/0.0.1"})
 
 
+def http_async_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(timeout=30.0, headers={"User-Agent": "ossmk/0.0.1"})
+
+
 @retry(
     reraise=True,
     stop=stop_after_attempt(5),
@@ -42,6 +47,19 @@ def http_client() -> httpx.Client:
 )
 def http_get(client: httpx.Client, url: str, headers: dict[str, str]) -> httpx.Response:
     return client.get(url, headers=headers)
+
+
+async def http_get_async(client: httpx.AsyncClient, url: str, headers: dict[str, str]) -> httpx.Response:
+    resp = await client.get(url, headers=headers)
+    # Handle secondary rate limiting (403) and 429
+    if resp.status_code in (429, 403):
+        reset = resp.headers.get("X-RateLimit-Reset")
+        if reset and reset.isdigit():
+            now = int(datetime.now(timezone.utc).timestamp())
+            wait_s = max(0, int(reset) - now) + 1
+            await asyncio.sleep(wait_s)
+            resp = await client.get(url, headers=headers)
+    return resp
 
 
 def parse_since(since: str | None) -> str | None:
