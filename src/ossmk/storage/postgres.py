@@ -6,17 +6,14 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 try:  # optional dependency at runtime
-    import psycopg  # type: ignore[reportMissingImports]
+    import psycopg as _psycopg  # type: ignore[reportMissingImports]
+    psycopg: Any | None = cast(Any, _psycopg)
 except Exception:  # pragma: no cover
     psycopg = None  # type: ignore[assignment]
 
 from ossmk.core.models import ContributionEvent
 
 from .base import StorageBackend
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
 
 
 def get_dsn(explicit: str | None = None) -> str:
@@ -96,7 +93,7 @@ def save_scores(conn: Any, scores: list[dict[str, object]]) -> int:
         (
             cast(str, s["user_id"]),
             cast(str, s["dimension"]),
-            float(cast(object, s["value"])),
+            float(cast(Any, s["value"])),
             cast(str, s.get("window", "all")),
         )
         for s in scores
@@ -143,3 +140,32 @@ def connect(dsn: str | None = None) -> Any:
     if psycopg is None:  # pragma: no cover
         raise RuntimeError("psycopg is not installed")
     return psycopg.connect(get_dsn(dsn))
+
+
+# ---- Optional higher-level helpers (stubs for now) ----
+
+def upsert_user(conn: Any, user_id: str, github_login: str, is_paid: bool | None) -> None:
+    return None
+
+
+def can_perform_update(conn: Any, user_id: str, kind: str) -> tuple[bool, str, int, int]:
+    # allowed, reason, used, limit
+    return True, "", 0, 999
+
+
+def record_update_usage(conn: Any, user_id: str, kind: str) -> None:
+    return None
+
+
+def get_latest_total(conn: Any, user_id: str) -> float:
+    return 0.0
+
+
+def save_snapshot(conn: Any, user_id: str, scores: list[dict[str, object]]) -> None:
+    return None
+
+
+def insert_growth_points(
+    conn: Any, user_id: str, points: float, prev_total: float, new_total: float
+) -> None:
+    return None

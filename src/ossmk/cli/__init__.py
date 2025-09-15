@@ -151,9 +151,14 @@ def rules_llm(
 ) -> None:
     """Suggest a rule TOML using an LLM from input events statistics."""
     payload = _read_json_input(input)
-    events = payload if isinstance(payload, list) else payload.get("events", payload)
+    events_list: list[dict[str, Any]]
+    if isinstance(payload, list):
+        events_list = [cast(dict[str, Any], e) for e in payload]
+    else:
+        raw_events = payload.get("events", [])
+        events_list = [cast(dict[str, Any], e) for e in raw_events] if isinstance(raw_events, list) else []
     cfg = LLMConfig(provider=provider, model=model, api_key=api_key)
-    toml_text = suggest_rules_from_events(events, cfg)
+    toml_text = suggest_rules_from_events(events_list, cfg)
     with open(out, "w", encoding="utf-8") as f:
         f.write(toml_text)
     rprint({"rules": out})
@@ -188,7 +193,7 @@ def rules_test(
         by_dim[s["dimension"]] = by_dim.get(s["dimension"], 0.0) + float(s["value"])
     # assertions
     ok = True
-    msgs = []
+    msgs: list[str] = []
     if expect_total_min is not None and total < expect_total_min:
         ok = False
         msgs.append(f"total {total} < {expect_total_min}")

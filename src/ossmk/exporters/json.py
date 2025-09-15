@@ -14,5 +14,5 @@ def write_json(data: Any, out: str = "-") -> None:
             f.write(buf)
 
 
-def exporter(*args, **kwargs):  # noqa: ANN001, D401
+def exporter(*args: Any, **kwargs: Any) -> None:  # noqa: D401
     return write_json(*args, **kwargs)

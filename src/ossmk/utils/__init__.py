@@ -55,8 +55,7 @@ def github_app_headers() -> dict[str, str] | None:
 
     now = int(datetime.now(UTC).timestamp())
     payload = {"iat": now - 60, "exp": now + 9 * 60, "iss": app_id}
-    encoded_any: Any = jwt.encode(payload, pem, algorithm="RS256")
-    encoded = cast(str, encoded_any)
+    encoded: str = cast(str, jwt.encode(payload, pem, algorithm="RS256"))  # type: ignore[reportUnknownMemberType]
     with httpx.Client(timeout=30) as client:
         if not inst_id:
             # list installations and pick by owner (account.login) if provided
