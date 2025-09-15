@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
-from typing import Any  # noqa: F401
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -15,15 +14,13 @@ class RateLimiter:
 
     capacity: int
     window_seconds: int
-    buckets: dict[str, tuple[int, float]] | None = None  # key -> (tokens, reset_ts)
-
-    def __post_init__(self) -> None:
-        if self.buckets is None:
-            self.buckets = {}
+    buckets: dict[str, tuple[int, float]] = field(default_factory=dict)  # key -> (tokens, reset_ts)
 
     def try_acquire(self, key: str, tokens: int = 1) -> bool:
         now = time.time()
-        tokens_left, reset_ts = self.buckets.get(key, (self.capacity, now + self.window_seconds))
+        tokens_left, reset_ts = self.buckets.get(
+            key, (self.capacity, now + self.window_seconds)
+        )
         if now >= reset_ts:
             tokens_left = self.capacity
             reset_ts = now + self.window_seconds

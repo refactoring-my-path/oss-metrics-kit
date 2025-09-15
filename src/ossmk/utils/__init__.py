@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
 import os
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
-from dateutil import parser as dateutil_parser
 import httpx
 import structlog
+from dateutil import parser as dateutil_parser
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
@@ -40,20 +41,22 @@ def github_app_headers() -> dict[str, str] | None:
     app_id = os.getenv("GITHUB_APP_ID")
     pem = os.getenv("GITHUB_APP_PRIVATE_KEY")
     inst_id = os.getenv("GITHUB_APP_INSTALLATION_ID")
+    # define here to avoid possibly-unbound warnings
+    owner: str | None = os.getenv("OSSMK_GH_INSTALLATION_OWNER")
+    repo: str | None = os.getenv("OSSMK_GH_INSTALLATION_REPO")
     if not (app_id and pem and inst_id):
         # Try auto-detect installation if owner/repo provided
-        owner = os.getenv("OSSMK_GH_INSTALLATION_OWNER")
-        repo = os.getenv("OSSMK_GH_INSTALLATION_REPO")
         if not (app_id and pem and (owner or repo)):
             return None
     try:
-        import jwt  # PyJWT
+        import jwt  # type: ignore[reportMissingImports]  # PyJWT
     except Exception as e:  # pragma: no cover
         raise RuntimeError("PyJWT not installed. pip install 'oss-metrics-kit[github-app]'") from e
 
     now = int(datetime.now(UTC).timestamp())
     payload = {"iat": now - 60, "exp": now + 9 * 60, "iss": app_id}
-    encoded = jwt.encode(payload, pem, algorithm="RS256")
+    encoded_any: Any = jwt.encode(payload, pem, algorithm="RS256")
+    encoded = cast(str, encoded_any)
     with httpx.Client(timeout=30) as client:
         if not inst_id:
             # list installations and pick by owner (account.login) if provided
@@ -65,12 +68,12 @@ def github_app_headers() -> dict[str, str] | None:
                 },
             )
             r0.raise_for_status()
-            installs = r0.json()
+            installs = cast(list[dict[str, Any]], r0.json())
             target = None
             if owner:
                 for ins in installs:
-                    acct = (ins.get("account") or {}).get("login")
-                    if acct and acct.lower() == owner.lower():
+                    acct = cast(dict[str, Any], (ins.get("account") or {})).get("login")
+                    if acct and cast(str, acct).lower() == owner.lower():
                         target = ins.get("id")
                         break
             if not target and installs:

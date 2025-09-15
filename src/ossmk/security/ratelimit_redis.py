@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Any
 
 try:
     import redis  # type: ignore
@@ -21,9 +22,9 @@ class RedisRateLimiter:
     capacity: int = 60
     window_seconds: int = 60
     prefix: str = "ossmk:rl:"
-    _client: any = None
+    _client: Any | None = None
 
-    def _redis(self):
+    def _redis(self) -> Any:
         if redis is None:
             raise RuntimeError("redis client not installed. pip install redis")
         if self._client is None:
@@ -31,7 +32,7 @@ class RedisRateLimiter:
         return self._client
 
     def try_acquire(self, key: str, tokens: int = 1) -> bool:
-        r = self._redis()
+        r: Any = self._redis()
         now_ms = int(time.time() * 1000)
         # Lua token bucket
         script = """
@@ -54,10 +55,10 @@ class RedisRateLimiter:
         redis.call('PEXPIRE', key, fill_ms)
         return allowed
         """
-        lua = r.register_script(script)
+        lua: Any = r.register_script(script)
         key_ = f"{self.prefix}{key}"
         fill_ms = self.window_seconds * 1000
-        res = lua(keys=[key_], args=[self.capacity, fill_ms, tokens, now_ms])
+        res: Any = lua(keys=[key_], args=[self.capacity, fill_ms, tokens, now_ms])
         return int(res) == 1
 
     @staticmethod

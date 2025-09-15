@@ -20,7 +20,13 @@ REQUESTS = (
     Counter("ossmk_requests_total", "Total HTTP requests", ["op"]) if Counter else None
 )
 LATENCY = (
-    Histogram("ossmk_request_latency_seconds", "HTTP request latency", ["op"]) if Histogram else None
+    Histogram(
+        "ossmk_request_latency_seconds",
+        "HTTP request latency",
+        ["op"],
+    )
+    if Histogram
+    else None
 )
 
 

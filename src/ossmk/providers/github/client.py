@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, cast
 
 import httpx
+from dateutil import parser as dateutil_parser
 
 from ossmk.core.models import ContributionEvent, EventKind
 from ossmk.storage.sqlite import HttpCache
@@ -30,6 +32,16 @@ class GitHubProvider:
 
     def _auth_headers(self) -> dict[str, str]:
         return github_auth_headers()
+
+    @staticmethod
+    def _parse_dt(val: Any) -> datetime:
+        from datetime import datetime as _dt
+        if isinstance(val, _dt):
+            return val
+        try:
+            return dateutil_parser.isoparse(str(val))
+        except Exception:
+            return _dt.now(UTC)
 
     def _cached_get_json(
         self, client: httpx.Client, url: str
@@ -81,16 +93,17 @@ class GitHubProvider:
             while True:
                 with record("github.issues_prs"):
                     data, next_url, _ = self._cached_get_json(client, url)
-                for item in data:
+                for item_any in data:
+                    item = cast(dict[str, Any], item_any)
                     kind = EventKind.pr if "pull_request" in item else EventKind.issue
-                    user = item.get("user") or {}
+                    user = cast(dict[str, Any], item.get("user") or {})
                     events.append(
                         ContributionEvent(
                             id=str(item["id"]),
                             kind=kind,
                             repo_id=f"github.com/{owner}/{name}",
                             user_id=str(user.get("login") or "unknown"),
-                            created_at=item.get("created_at"),
+                            created_at=self._parse_dt(item.get("created_at")),
                             lines_added=0,
                             lines_removed=0,
                         )
@@ -115,10 +128,11 @@ class GitHubProvider:
             while True:
                 with record("github.commits"):
                     data, next_url, _ = self._cached_get_json(client, url)
-                for c in data:
+                for c_any in data:
+                    c = cast(dict[str, Any], c_any)
                     author = (
-                        (c.get("author") or {}).get("login")
-                        or (c.get("committer") or {}).get("login")
+                        cast(dict[str, Any], c.get("author") or {}).get("login")
+                        or cast(dict[str, Any], c.get("committer") or {}).get("login")
                         or "unknown"
                     )
                     if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(author):
@@ -129,7 +143,11 @@ class GitHubProvider:
                             kind=EventKind.commit,
                             repo_id=f"github.com/{owner}/{name}",
                             user_id=str(author),
-                            created_at=(c.get("commit") or {}).get("author", {}).get("date"),
+                            created_at=self._parse_dt(
+                                cast(dict[str, Any], c.get("commit") or {})
+                                .get("author", {})
+                                .get("date")
+                            ),
                             lines_added=0,
                             lines_removed=0,
                         )
@@ -160,8 +178,10 @@ class GitHubProvider:
                 url = reviews_url
                 while True:
                     data, next_url, _ = self._cached_get_json(client, url)
-                    for rv in data:
-                        user = (rv.get("user") or {}).get("login") or "unknown"
+                    for rv_any in data:
+                        rv = cast(dict[str, Any], rv_any)
+                        user_dict = cast(dict[str, Any], rv.get("user") or {})
+                        user = user_dict.get("login") or "unknown"
                         if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(user):
                             continue
                         events.append(
@@ -170,7 +190,9 @@ class GitHubProvider:
                                 kind=EventKind.review,
                                 repo_id=f"github.com/{owner}/{name}",
                                 user_id=str(user),
-                                created_at=rv.get("submitted_at") or rv.get("created_at"),
+                                created_at=self._parse_dt(
+                                    rv.get("submitted_at") or rv.get("created_at")
+                                ),
                                 lines_added=0,
                                 lines_removed=0,
                             )
@@ -246,10 +268,11 @@ class GitHubProvider:
             url = base_url
             while True:
                 data, next_url, _ = await self._cached_get_json_async(client, url)
-                for c in data:
+                for c_any in data:
+                    c = cast(dict[str, Any], c_any)
                     author = (
-                        (c.get("author") or {}).get("login")
-                        or (c.get("committer") or {}).get("login")
+                        cast(dict[str, Any], c.get("author") or {}).get("login")
+                        or cast(dict[str, Any], c.get("committer") or {}).get("login")
                         or "unknown"
                     )
                     events.append(
@@ -258,7 +281,11 @@ class GitHubProvider:
                             kind=EventKind.commit,
                             repo_id=f"github.com/{owner}/{name}",
                             user_id=str(author),
-                            created_at=(c.get("commit") or {}).get("author", {}).get("date"),
+                            created_at=self._parse_dt(
+                                cast(dict[str, Any], c.get("commit") or {})
+                                .get("author", {})
+                                .get("date")
+                            ),
                             lines_added=0,
                             lines_removed=0,
                         )
@@ -294,15 +321,19 @@ class GitHubProvider:
                 while True:
                     with record("github.reviews"):
                         data, next_url, _ = await self._cached_get_json_async(client, url)
-                    for rv in data:
-                        user = (rv.get("user") or {}).get("login") or "unknown"
+                    for rv_any in data:
+                        rv = cast(dict[str, Any], rv_any)
+                        user_dict = cast(dict[str, Any], rv.get("user") or {})
+                        user = user_dict.get("login") or "unknown"
                         events.append(
                             ContributionEvent(
                                 id=str(rv.get("id")),
                                 kind=EventKind.review,
                                 repo_id=f"github.com/{owner}/{name}",
                                 user_id=str(user),
-                                created_at=rv.get("submitted_at") or rv.get("created_at"),
+                                created_at=self._parse_dt(
+                                    rv.get("submitted_at") or rv.get("created_at")
+                                ),
                                 lines_added=0,
                                 lines_removed=0,
                             )
@@ -323,8 +354,10 @@ class GitHubProvider:
             "  search(type: ISSUE, query: $q, first: 100, after: $after){"
             "    pageInfo{ hasNextPage endCursor }"
             "    nodes {"
-            "      ... on PullRequest { id number repository { nameWithOwner } author { login } createdAt }"
-            "      ... on Issue { id number repository { nameWithOwner } author { login } createdAt }"
+            "      ... on PullRequest { id number repository { nameWithOwner } author { login } "
+            "createdAt }"
+            "      ... on Issue { id number repository { nameWithOwner } author { login } "
+            "createdAt }"
             "    }"
             "  }"
             "}"
@@ -332,32 +365,36 @@ class GitHubProvider:
         q_base = f"author:{login} is:public"
         events: list[ContributionEvent] = []
         async with http_async_client() as client:
-            after = None
+            after: str | None = None
             while True:
-                payload = {"query": query, "variables": {"q": q_base, "after": after}}
+                payload: dict[str, Any] = {"query": query, "variables": {"q": q_base, "after": after}}
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
-                data = resp.json().get("data") or {}
-                search = data.get("search") or {}
-                nodes = search.get("nodes") or []
-                for n in nodes:
-                    repo = (n.get("repository") or {}).get("nameWithOwner") or "unknown/unknown"
+                data = cast(dict[str, Any], resp.json().get("data") or {})
+                search = cast(dict[str, Any], data.get("search") or {})
+                nodes = cast(list[Any], search.get("nodes") or [])
+                for n_any in nodes:
+                    n = cast(dict[str, Any], n_any)
+                    repo_dict = cast(dict[str, Any], (n.get("repository") or {}))
+                    repo = repo_dict.get("nameWithOwner") or "unknown/unknown"
                     kind = EventKind.pr if "PullRequest" in str(n) else EventKind.issue
+                    author_dict = cast(dict[str, Any], (n.get("author") or {}))
+                    login_val = author_dict.get("login") or login
                     events.append(
                         ContributionEvent(
                             id=str(n.get("id")),
                             kind=kind,
                             repo_id=f"github.com/{repo}",
-                            user_id=str(((n.get("author") or {}).get("login")) or login),
-                            created_at=n.get("createdAt"),
+                            user_id=str(login_val),
+                            created_at=self._parse_dt(n.get("createdAt")),
                             lines_added=0,
                             lines_removed=0,
                         )
                     )
-                page = search.get("pageInfo") or {}
-                if not page.get("hasNextPage"):
+                page = cast(dict[str, Any], search.get("pageInfo") or {})
+                if not cast(bool, page.get("hasNextPage")):
                     break
-                after = page.get("endCursor")
+                after = cast(str | None, page.get("endCursor"))
         return events
 
     async def fetch_repo_commits_graphql_async(
@@ -373,7 +410,10 @@ class GitHubProvider:
             "    defaultBranchRef {"
             "      target {"
             "        ... on Commit {"
-            "          history(first:100, since:$since){ pageInfo{ hasNextPage endCursor } nodes{ oid committedDate author{ user{ login } } } }"
+            "          history(first:100, since:$since){"
+            "            pageInfo{ hasNextPage endCursor }"
+            "            nodes{ oid committedDate author{ user{ login } } }"
+            "          }"
             "        }"
             "      }"
             "    }"
@@ -393,14 +433,15 @@ class GitHubProvider:
                     url, headers=headers, json={"query": query, "variables": variables}
                 )
                 resp.raise_for_status()
-                data = resp.json().get("data") or {}
-                repo_data = (data.get("repository") or {}).get("defaultBranchRef") or {}
-                target = repo_data.get("target") or {}
-                history = (target.get("history") or {})
-                nodes = history.get("nodes") or []
-                for n in nodes:
-                    au = (n.get("author") or {}).get("user") or {}
-                    login = au.get("login") or "unknown"
+                data = cast(dict[str, Any], resp.json().get("data") or {})
+                repo_data = cast(dict[str, Any], (cast(dict[str, Any], data.get("repository") or {})).get("defaultBranchRef") or {})
+                target = cast(dict[str, Any], repo_data.get("target") or {})
+                history = cast(dict[str, Any], (target.get("history") or {}))
+                nodes = cast(list[Any], history.get("nodes") or [])
+                for n_any in nodes:
+                    n = cast(dict[str, Any], n_any)
+                    au = cast(dict[str, Any], (n.get("author") or {}).get("user") or {})
+                    login = str(au.get("login") or "unknown")
                     if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(login):
                         continue
                     events.append(
@@ -409,15 +450,15 @@ class GitHubProvider:
                             kind=EventKind.commit,
                             repo_id=f"github.com/{owner}/{name}",
                             user_id=str(login),
-                            created_at=n.get("committedDate"),
+                            created_at=self._parse_dt(n.get("committedDate")),
                             lines_added=0,
                             lines_removed=0,
                         )
                     )
-                page = history.get("pageInfo") or {}
-                if not page.get("hasNextPage"):
+                page = cast(dict[str, Any], history.get("pageInfo") or {})
+                if not cast(bool, page.get("hasNextPage")):
                     break
-                after = page.get("endCursor")
+                after = cast(str | None, page.get("endCursor"))
         return events
 
     async def fetch_repo_reviews_graphql_async(
@@ -442,7 +483,7 @@ class GitHubProvider:
         )
         events: list[ContributionEvent] = []
         async with http_async_client() as client:
-            after = None
+            after: str | None = None
             total = 0
             while True and (max_reviews is None or total < max_reviews):
                 resp = await client.post(
@@ -454,12 +495,14 @@ class GitHubProvider:
                     },
                 )
                 resp.raise_for_status()
-                data = resp.json().get("data") or {}
-                prs = (((data.get("repository") or {}).get("pullRequests")) or {})
-                nodes = prs.get("nodes") or []
+                data = cast(dict[str, Any], resp.json().get("data") or {})
+                repo_obj = cast(dict[str, Any], data.get("repository") or {})
+                prs = cast(dict[str, Any], repo_obj.get("pullRequests") or {})
+                nodes = cast(list[Any], prs.get("nodes") or [])
                 for pr in nodes:
-                    revs = (pr.get("reviews") or {})
-                    for rv in (revs.get("nodes") or []):
+                    pr_obj = cast(dict[str, Any], pr)
+                    revs = cast(dict[str, Any], (pr_obj.get("reviews") or {}))
+                    for rv in cast(list[Any], (revs.get("nodes") or [])):
                         user = (rv.get("author") or {}).get("login") or "unknown"
                         if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(user):
                             continue
@@ -469,7 +512,7 @@ class GitHubProvider:
                                 kind=EventKind.review,
                                 repo_id=f"github.com/{owner}/{name}",
                                 user_id=str(user),
-                                created_at=rv.get("submittedAt"),
+                                created_at=self._parse_dt(rv.get("submittedAt")),
                                 lines_added=0,
                                 lines_removed=0,
                             )
@@ -479,12 +522,12 @@ class GitHubProvider:
                             break
                     if max_reviews is not None and total >= max_reviews:
                         break
-                page = prs.get("pageInfo") or {}
-                if not page.get("hasNextPage") or (
+                page = cast(dict[str, Any], prs.get("pageInfo") or {})
+                if not cast(bool, page.get("hasNextPage")) or (
                     max_reviews is not None and total >= max_reviews
                 ):
                     break
-                after = page.get("endCursor")
+                after = cast(str | None, page.get("endCursor"))
         return events
 
     async def fetch_user_contributions_graphql_full_async(

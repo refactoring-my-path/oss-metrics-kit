@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +23,7 @@ class Repo(BaseModel):
 class User(BaseModel):
     id: str
     login: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     orgs: list[str] = Field(default_factory=list)
 
 
@@ -60,4 +59,3 @@ class ScoreRule(BaseModel):
     weight: float = 1.0
     decay: float = 1.0
     threshold: float = 0.0
-
