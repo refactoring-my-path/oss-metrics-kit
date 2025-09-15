@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import os
-from datetime import UTC, datetime
 from collections.abc import Iterable
+from datetime import UTC, datetime
+import os
 
 import psycopg
 
-from ossmk.core.models import ContributionEvent
 from .base import StorageBackend
+from ossmk.core.models import ContributionEvent
 
 
 def _now() -> datetime:

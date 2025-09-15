@@ -400,16 +400,22 @@ class GitHubProvider:
                 after = page.get("endCursor")
         return events
 
-    async def fetch_repo_reviews_graphql_async(self, repo: str, max_reviews: int | None = 1000) -> list[ContributionEvent]:
+    async def fetch_repo_reviews_graphql_async(
+        self,
+        repo: str,
+        max_reviews: int | None = 1000,
+    ) -> list[ContributionEvent]:
         owner, name = repo.split("/", 1)
         url = "https://api.github.com/graphql"
         headers = self._auth_headers()
         query = (
             "query($owner:String!, $name:String!, $after:String){"
             "  repository(owner:$owner, name:$name){"
-            "    pullRequests(states:[OPEN,MERGED,CLOSED], first:100, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}){"
+            "    pullRequests(states:[OPEN,MERGED,CLOSED], first:100, after:$after, "
+            "orderBy:{field:UPDATED_AT, direction:DESC}){"
             "      pageInfo{ hasNextPage endCursor }"
-            "      nodes{ number reviews(first:100){ pageInfo{ hasNextPage endCursor } nodes{ id author{ login } submittedAt } } }"
+            "      nodes{ number reviews(first:100){ pageInfo{ hasNextPage endCursor } "
+            "nodes{ id author{ login } submittedAt } } }"
             "    }"
             "  }"
             "}"
@@ -419,7 +425,14 @@ class GitHubProvider:
             after = None
             total = 0
             while True and (max_reviews is None or total < max_reviews):
-                resp = await client.post(url, headers=headers, json={"query": query, "variables": {"owner": owner, "name": name, "after": after}})
+                resp = await client.post(
+                    url,
+                    headers=headers,
+                    json={
+                        "query": query,
+                        "variables": {"owner": owner, "name": name, "after": after},
+                    },
+                )
                 resp.raise_for_status()
                 data = resp.json().get("data") or {}
                 prs = (((data.get("repository") or {}).get("pullRequests")) or {})
@@ -447,7 +460,9 @@ class GitHubProvider:
                     if max_reviews is not None and total >= max_reviews:
                         break
                 page = prs.get("pageInfo") or {}
-                if not page.get("hasNextPage") or (max_reviews is not None and total >= max_reviews):
+                if not page.get("hasNextPage") or (
+                    max_reviews is not None and total >= max_reviews
+                ):
                     break
                 after = page.get("endCursor")
         return events
