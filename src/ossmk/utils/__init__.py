@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 import asyncio
 
 import httpx
@@ -22,7 +22,7 @@ def get_logger() -> structlog.stdlib.BoundLogger:
 
 
 def utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def github_token_from_env() -> str:
@@ -51,7 +51,7 @@ def github_app_headers() -> dict[str, str] | None:
     except Exception as e:  # pragma: no cover
         raise RuntimeError("PyJWT not installed. pip install 'oss-metrics-kit[github-app]'") from e
 
-    now = int(datetime.now(timezone.utc).timestamp())
+    now = int(datetime.now(UTC).timestamp())
     payload = {"iat": now - 60, "exp": now + 9 * 60, "iss": app_id}
     encoded = jwt.encode(payload, pem, algorithm="RS256")
     with httpx.Client(timeout=30) as client:
@@ -115,7 +115,7 @@ async def http_get_async(client: httpx.AsyncClient, url: str, headers: dict[str,
     if resp.status_code in (429, 403):
         reset = resp.headers.get("X-RateLimit-Reset")
         if reset and reset.isdigit():
-            now = int(datetime.now(timezone.utc).timestamp())
+    now = int(datetime.now(UTC).timestamp())
             wait_s = max(0, int(reset) - now) + 1
             await asyncio.sleep(wait_s)
             resp = await client.get(url, headers=headers)
@@ -132,20 +132,20 @@ def parse_since(since: str | None, max_days: int | None = 180) -> str | None:
     s = since.strip().lower()
     if s.endswith("d") and s[:-1].isdigit():
         days = int(s[:-1])
-        dt = datetime.now(timezone.utc) - timedelta(days=days)
+        dt = datetime.now(UTC) - timedelta(days=days)
         return dt.isoformat()
     if s.endswith("h") and s[:-1].isdigit():
         hours = int(s[:-1])
-        dt = datetime.now(timezone.utc) - timedelta(hours=hours)
+        dt = datetime.now(UTC) - timedelta(hours=hours)
         return dt.isoformat()
     # ISO input
     try:
         dt = dateutil_parser.isoparse(s)
         if not dt.tzinfo:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         # clamp
         if max_days is not None:
-            earliest = datetime.now(timezone.utc) - timedelta(days=max_days)
+            earliest = datetime.now(UTC) - timedelta(days=max_days)
             if dt < earliest:
                 dt = earliest
         return dt.isoformat()
@@ -170,7 +170,7 @@ def parse_link_next(link_header: str | None) -> str | None:
 def is_bot_login(login: str | None) -> bool:
     if not login:
         return False
-    l = login.lower()
-    if l in {"dependabot", "github-actions", "renovate[bot]", "renovate"}:
+    lower_login = login.lower()
+    if lower_login in {"dependabot", "github-actions", "renovate[bot]", "renovate"}:
         return True
-    return l.endswith("[bot]") or l.endswith("-bot") or "[bot]" in l
+    return lower_login.endswith("[bot]") or lower_login.endswith("-bot") or "[bot]" in lower_login
