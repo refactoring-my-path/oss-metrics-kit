@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 try:  # optional dependency
     import pyarrow as pa  # type: ignore[reportMissingImports]
@@ -15,11 +15,15 @@ def write_parquet(rows: list[dict[str, Any]], out_path: str) -> None:
         raise RuntimeError("pyarrow is not installed")
     if not rows:
         # create empty file with no rows
-        table = pa.table({})
-        pq.write_table(table, out_path)
+        pa_mod = cast(Any, pa)
+        pq_mod = cast(Any, pq)
+        table: Any = pa_mod.table({})
+        pq_mod.write_table(table, out_path)
         return
     # unify keys
     keys = sorted({k for r in rows for k in r.keys()})
     arrays = {k: [r.get(k) for r in rows] for k in keys}
-    table = pa.table(arrays)
-    pq.write_table(table, out_path)
+    pa_mod = cast(Any, pa)
+    pq_mod = cast(Any, pq)
+    table: Any = pa_mod.table(arrays)
+    pq_mod.write_table(table, out_path)

@@ -4,10 +4,13 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from typing import cast
+
 try:
-    import redis  # type: ignore
+    import redis as _redis  # type: ignore[reportMissingImports]
+    redis: Any | None = cast(Any, _redis)
 except Exception:  # pragma: no cover
-    redis = None  # type: ignore
+    redis = None  # type: ignore[assignment]
 
 
 @dataclass

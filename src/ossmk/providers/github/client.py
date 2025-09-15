@@ -93,8 +93,7 @@ class GitHubProvider:
             while True:
                 with record("github.issues_prs"):
                     data, next_url, _ = self._cached_get_json(client, url)
-                for item_any in data:
-                    item = cast(dict[str, Any], item_any)
+                for item in data:
                     kind = EventKind.pr if "pull_request" in item else EventKind.issue
                     user = cast(dict[str, Any], item.get("user") or {})
                     events.append(
@@ -128,8 +127,7 @@ class GitHubProvider:
             while True:
                 with record("github.commits"):
                     data, next_url, _ = self._cached_get_json(client, url)
-                for c_any in data:
-                    c = cast(dict[str, Any], c_any)
+                for c in data:
                     author = (
                         cast(dict[str, Any], c.get("author") or {}).get("login")
                         or cast(dict[str, Any], c.get("committer") or {}).get("login")
@@ -178,10 +176,9 @@ class GitHubProvider:
                 url = reviews_url
                 while True:
                     data, next_url, _ = self._cached_get_json(client, url)
-                    for rv_any in data:
-                        rv = cast(dict[str, Any], rv_any)
+                    for rv in data:
                         user_dict = cast(dict[str, Any], rv.get("user") or {})
-                        user = user_dict.get("login") or "unknown"
+                        user = cast(str, user_dict.get("login") or "unknown")
                         if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(user):
                             continue
                         events.append(
@@ -268,8 +265,7 @@ class GitHubProvider:
             url = base_url
             while True:
                 data, next_url, _ = await self._cached_get_json_async(client, url)
-                for c_any in data:
-                    c = cast(dict[str, Any], c_any)
+                for c in data:
                     author = (
                         cast(dict[str, Any], c.get("author") or {}).get("login")
                         or cast(dict[str, Any], c.get("committer") or {}).get("login")
@@ -321,10 +317,9 @@ class GitHubProvider:
                 while True:
                     with record("github.reviews"):
                         data, next_url, _ = await self._cached_get_json_async(client, url)
-                    for rv_any in data:
-                        rv = cast(dict[str, Any], rv_any)
+                    for rv in data:
                         user_dict = cast(dict[str, Any], rv.get("user") or {})
-                        user = user_dict.get("login") or "unknown"
+                        user = cast(str, user_dict.get("login") or "unknown")
                         events.append(
                             ContributionEvent(
                                 id=str(rv.get("id")),
@@ -367,7 +362,10 @@ class GitHubProvider:
         async with http_async_client() as client:
             after: str | None = None
             while True:
-                payload: dict[str, Any] = {"query": query, "variables": {"q": q_base, "after": after}}
+                payload: dict[str, Any] = {
+                    "query": query,
+                    "variables": {"q": q_base, "after": after},
+                }
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 data = cast(dict[str, Any], resp.json().get("data") or {})
@@ -434,7 +432,10 @@ class GitHubProvider:
                 )
                 resp.raise_for_status()
                 data = cast(dict[str, Any], resp.json().get("data") or {})
-                repo_data = cast(dict[str, Any], (cast(dict[str, Any], data.get("repository") or {})).get("defaultBranchRef") or {})
+                repo_data = cast(
+                    dict[str, Any],
+                    cast(dict[str, Any], data.get("repository") or {}).get("defaultBranchRef") or {},
+                )
                 target = cast(dict[str, Any], repo_data.get("target") or {})
                 history = cast(dict[str, Any], (target.get("history") or {}))
                 nodes = cast(list[Any], history.get("nodes") or [])
@@ -503,7 +504,9 @@ class GitHubProvider:
                     pr_obj = cast(dict[str, Any], pr)
                     revs = cast(dict[str, Any], (pr_obj.get("reviews") or {}))
                     for rv in cast(list[Any], (revs.get("nodes") or [])):
-                        user = (rv.get("author") or {}).get("login") or "unknown"
+                        rv = cast(dict[str, Any], rv)
+                        author_obj = cast(dict[str, Any], (rv.get("author") or {}))
+                        user = cast(str, author_obj.get("login") or "unknown")
                         if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(user):
                             continue
                         events.append(

@@ -42,7 +42,8 @@ def create_rate_limiter_dependency(
 
     def _dep(request: Request, **kwargs: Any) -> bool:
         user_id = kwargs.get(user_arg, "anon")
-        ip = request.client.host if getattr(request, "client", None) else "0.0.0.0"
+        cl = getattr(request, "client", None)
+        ip = cl.host if cl is not None else "0.0.0.0"
         key = limiter.composite_key(user_id, ip)
         if not limiter.try_acquire(key):
             raise HTTPException(status_code=429, detail="Too Many Requests")

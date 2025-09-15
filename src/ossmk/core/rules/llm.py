@@ -27,8 +27,8 @@ def _openai_complete(cfg: LLMConfig, content: str) -> str:
         raise RuntimeError(
             "OpenAI client not installed. pip install 'oss-metrics-kit[llm-openai]'"
         ) from e
-    client: Any = OpenAI(api_key=cfg.api_key)
-    resp: Any = client.chat.completions.create(
+    client: Any = cast(Any, OpenAI(api_key=cfg.api_key))
+    resp: Any = cast(Any, client).chat.completions.create(
         model=cfg.model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -46,8 +46,8 @@ def _anthropic_complete(cfg: LLMConfig, content: str) -> str:
         raise RuntimeError(
             "Anthropic client not installed. pip install 'oss-metrics-kit[llm-anthropic]'"
         ) from e
-    client: Any = anthropic.Anthropic(api_key=cfg.api_key)
-    msg: Any = client.messages.create(
+    client: Any = cast(Any, anthropic.Anthropic(api_key=cfg.api_key))
+    msg: Any = cast(Any, client).messages.create(
         model=cfg.model,
         max_tokens=1000,
         temperature=0.2,
