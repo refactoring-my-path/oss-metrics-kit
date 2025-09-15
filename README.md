@@ -79,6 +79,12 @@ ossmk analyze-user <your_github_login> --out -
 
 ストレージはDSNで切り替え（Postgres/SQLite）。Parquetはオプション機能（分析用）です。
 
+### LLMベースのルール支援（任意）
+
+- ルール提案: `ossmk rules-llm --input events.json --provider openai --model gpt-4o-mini --out rules.toml`
+- 必要なエクストラ: `pip install "oss-metrics-kit[llm-openai]"` または `oss-metrics-kit[llm-anthropic]`
+- 詳細: `docs/LLM_RULES.md`
+
 ## PyPI公開手順（メンテナ向け）
 
 準備
