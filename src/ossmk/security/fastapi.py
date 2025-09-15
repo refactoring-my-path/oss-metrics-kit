@@ -9,7 +9,11 @@ def create_rate_limiter_dependency(limiter: RedisRateLimiter, user_arg: str = "u
     """Create a FastAPI dependency that enforces rate limits by user_id + IP.
 
     Example:
-        rl = RedisRateLimiter(url=os.getenv("REDIS_URL", "redis://localhost:6379/0"), capacity=60, window_seconds=60)
+        rl = RedisRateLimiter(
+            url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            capacity=60,
+            window_seconds=60,
+        )
         limit_dep = create_rate_limiter_dependency(rl)
         @app.post('/analyze')
         def analyze(user_id: str, request: Request, _=Depends(limit_dep)):
@@ -25,4 +29,3 @@ def create_rate_limiter_dependency(limiter: RedisRateLimiter, user_arg: str = "u
         return True
 
     return _dep
-

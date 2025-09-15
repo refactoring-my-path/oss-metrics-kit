@@ -59,7 +59,10 @@ def github_app_headers() -> dict[str, str] | None:
             # list installations and pick by owner (account.login) if provided
             r0 = client.get(
                 "https://api.github.com/app/installations",
-                headers={"Authorization": f"Bearer {encoded}", "Accept": "application/vnd.github+json"},
+                headers={
+                    "Authorization": f"Bearer {encoded}",
+                    "Accept": "application/vnd.github+json",
+                },
             )
             r0.raise_for_status()
             installs = r0.json()
@@ -77,7 +80,10 @@ def github_app_headers() -> dict[str, str] | None:
                 return None
         r = client.post(
             f"https://api.github.com/app/installations/{inst_id}/access_tokens",
-            headers={"Authorization": f"Bearer {encoded}", "Accept": "application/vnd.github+json"},
+            headers={
+                "Authorization": f"Bearer {encoded}",
+                "Accept": "application/vnd.github+json",
+            },
         )
         r.raise_for_status()
         token = r.json()["token"]
@@ -88,7 +94,10 @@ def github_auth_headers() -> dict[str, str]:
     app = github_app_headers()
     if app:
         return app
-    return {"Authorization": f"Bearer {github_token_from_env()}", "Accept": "application/vnd.github+json"}
+    return {
+        "Authorization": f"Bearer {github_token_from_env()}",
+        "Accept": "application/vnd.github+json",
+    }
 
 
 def http_client() -> httpx.Client:
@@ -109,13 +118,15 @@ def http_get(client: httpx.Client, url: str, headers: dict[str, str]) -> httpx.R
     return client.get(url, headers=headers)
 
 
-async def http_get_async(client: httpx.AsyncClient, url: str, headers: dict[str, str]) -> httpx.Response:
+async def http_get_async(
+    client: httpx.AsyncClient, url: str, headers: dict[str, str]
+) -> httpx.Response:
     resp = await client.get(url, headers=headers)
     # Handle secondary rate limiting (403) and 429
     if resp.status_code in (429, 403):
         reset = resp.headers.get("X-RateLimit-Reset")
         if reset and reset.isdigit():
-    now = int(datetime.now(UTC).timestamp())
+            now = int(datetime.now(UTC).timestamp())
             wait_s = max(0, int(reset) - now) + 1
             await asyncio.sleep(wait_s)
             resp = await client.get(url, headers=headers)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Any
 
 
 @dataclass
@@ -15,7 +15,7 @@ class RateLimiter:
 
     capacity: int
     window_seconds: int
-    buckets: Dict[str, Tuple[int, float]] = None  # key -> (tokens, reset_ts)
+    buckets: dict[str, tuple[int, float]] | None = None  # key -> (tokens, reset_ts)
 
     def __post_init__(self) -> None:
         if self.buckets is None:
@@ -33,4 +33,3 @@ class RateLimiter:
             return True
         self.buckets[key] = (tokens_left, reset_ts)
         return False
-
