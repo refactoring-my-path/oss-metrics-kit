@@ -33,12 +33,36 @@ class RedisRateLimiter:
 
     def try_acquire(self, key: str, tokens: int = 1) -> bool:
         r = self._redis()
-        now = int(time.time())
-        window = now // self.window_seconds
-        k = f"{self.prefix}{key}:{window}"
-        with r.pipeline() as p:
-            p.incrby(k, tokens)
-            p.expire(k, self.window_seconds)
-            count, _ = p.execute()
-        return int(count) <= self.capacity
+        now_ms = int(time.time() * 1000)
+        # Lua token bucket
+        script = """
+        local key = KEYS[1]
+        local capacity = tonumber(ARGV[1])
+        local fill_ms = tonumber(ARGV[2])
+        local tokens_req = tonumber(ARGV[3])
+        local now = tonumber(ARGV[4])
+        local last_ts = tonumber(redis.call('HGET', key, 'ts') or now)
+        local tokens = tonumber(redis.call('HGET', key, 'tokens') or capacity)
+        local delta = math.max(0, now - last_ts)
+        local refill = (capacity * delta) / fill_ms
+        tokens = math.min(capacity, tokens + refill)
+        local allowed = 0
+        if tokens >= tokens_req then
+          tokens = tokens - tokens_req
+          allowed = 1
+        end
+        redis.call('HMSET', key, 'tokens', tokens, 'ts', now)
+        redis.call('PEXPIRE', key, fill_ms)
+        return allowed
+        """
+        lua = r.register_script(script)
+        key_ = f"{self.prefix}{key}"
+        fill_ms = self.window_seconds * 1000
+        res = lua(keys=[key_], args=[self.capacity, fill_ms, tokens, now_ms])
+        return int(res) == 1
 
+    @staticmethod
+    def composite_key(user_id: str | None, ip: str | None) -> str:
+        u = user_id or "anon"
+        i = ip or "0.0.0.0"
+        return f"user:{u}|ip:{i}"

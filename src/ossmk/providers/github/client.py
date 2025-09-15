@@ -17,7 +17,9 @@ from ossmk.utils import (
     parse_since,
     http_async_client,
     http_get_async,
+    is_bot_login,
 )
+import os
 
 
 class GitHubProvider:
@@ -110,6 +112,8 @@ class GitHubProvider:
                 data, next_url, _ = self._cached_get_json(client, url)
                 for c in data:
                     author = (c.get("author") or {}).get("login") or (c.get("committer") or {}).get("login") or "unknown"
+                    if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(author):
+                        continue
                     events.append(
                         ContributionEvent(
                             id=str(c.get("sha")),
@@ -149,6 +153,8 @@ class GitHubProvider:
                     data, next_url, _ = self._cached_get_json(client, url)
                     for rv in data:
                         user = (rv.get("user") or {}).get("login") or "unknown"
+                        if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(user):
+                            continue
                         events.append(
                             ContributionEvent(
                                 id=str(rv.get("id")),
@@ -192,7 +198,11 @@ class GitHubProvider:
         repos = self.fetch_user_repos(login)
         if max_repos is not None:
             repos = repos[:max_repos]
-        semaphore = asyncio.Semaphore(5)
+        try:
+            conc = int(os.getenv("OSSMK_CONCURRENCY", "5"))
+        except Exception:
+            conc = 5
+        semaphore = asyncio.Semaphore(max(1, min(conc, 20)))
         events: list[ContributionEvent] = []
 
         async def fetch_repo(repo: str) -> None:

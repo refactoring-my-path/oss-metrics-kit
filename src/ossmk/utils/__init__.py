@@ -106,3 +106,12 @@ def parse_link_next(link_header: str | None) -> str | None:
             if start != -1 and end != -1:
                 return p[start + 1 : end]
     return None
+
+
+def is_bot_login(login: str | None) -> bool:
+    if not login:
+        return False
+    l = login.lower()
+    if l in {"dependabot", "github-actions", "renovate[bot]", "renovate"}:
+        return True
+    return l.endswith("[bot]") or l.endswith("-bot") or "[bot]" in l

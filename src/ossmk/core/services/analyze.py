@@ -35,6 +35,15 @@ def analyze_github_user(
     since: str | None = None,
     api: str = "auto",
 ) -> AnalysisResult:
+    # Clamp since for programmatic usage as well
+    import os
+    from ossmk.utils import parse_since
+    try:
+        max_days = int(os.getenv("OSSMK_MAX_SINCE_DAYS", "180"))
+    except Exception:
+        max_days = 180
+    since = parse_since(since, max_days=max_days)
+
     if api == "rest":
         events: list[ContributionEvent] = github.fetch_user_contributions(login, since=since)
     elif api == "graphql":
