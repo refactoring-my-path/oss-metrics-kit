@@ -2,18 +2,19 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Any, TypedDict, cast
 
 import tomllib
 
 import os
+from datetime import datetime, timezone
 from ossmk.core.models import ContributionEvent
 
 
 @dataclass
 class RuleSet:
     # mapping from dimension -> {kinds: set[str], weight: float, weights_by_kind: dict[str,float], clip_per_user_day: dict[str,int]}
-    dimensions: dict[str, dict]
+    dimensions: dict[str, dict[str, Any]]
     fairness: dict[str, int] | None = None  # global clip per user per day by kind
     decay_half_life_days: float | None = None  # global half-life (exponential)
     decay_mode: str | None = None  # 'exponential' (default), 'linear', 'window'
@@ -43,20 +44,27 @@ def load_rules(rules: str) -> RuleSet:
     if rules.endswith(".toml"):
         with open(rules, "rb") as f:
             data = tomllib.load(f)
-        dims: dict[str, dict] = {}
-        for dim, spec in data.get("dimensions", {}).items():
-            kinds = set(spec.get("kinds", []))
+        dims: dict[str, dict[str, Any]] = {}
+        dimensions_raw = cast(dict[str, Any], data.get("dimensions", {}))
+        for dim, spec_any in dimensions_raw.items():
+            spec = cast(dict[str, Any], spec_any)
+            kinds = {str(x) for x in cast(list[Any], spec.get("kinds", []))}
             weight = float(spec.get("weight", 1.0))
-            weights_by_kind = {k: float(v) for k, v in (spec.get("weights_by_kind", {}) or {}).items()}
+            weights_raw = cast(dict[Any, Any], (spec.get("weights_by_kind", {}) or {}))
+            weights_by_kind: dict[str, float] = {str(k): float(v) for k, v in weights_raw.items()}
             clip = spec.get("clip_per_user_day")  # allow per-dimension override if needed
-            entry = {"kinds": kinds, "weight": weight}
+            entry: dict[str, Any] = {"kinds": kinds, "weight": weight}
             if weights_by_kind:
                 entry["weights_by_kind"] = weights_by_kind
             if clip:
-                entry["clip_per_user_day"] = {k: int(v) for k, v in clip.items()}
+                clip_map = cast(dict[Any, Any], clip)
+                entry["clip_per_user_day"] = {str(k): int(v) for k, v in clip_map.items()}
             dims[dim] = entry
-        fairness = data.get("fairness", {}).get("clip_per_user_day")
-        fairness_map = {k: int(v) for k, v in fairness.items()} if fairness else _default_rules().fairness
+        fairness_raw = cast(dict[str, Any], data.get("fairness", {}))
+        fairness_clip = cast(dict[Any, Any] | None, fairness_raw.get("clip_per_user_day"))
+        fairness_map = (
+            {str(k): int(v) for k, v in fairness_clip.items()} if fairness_clip else _default_rules().fairness
+        )
         # decay
         hl = data.get("decay_half_life_days")
         decay_global = float(hl) if hl is not None else None
@@ -70,13 +78,19 @@ def load_rules(rules: str) -> RuleSet:
     return _default_rules()
 
 
-def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[dict]:
+class ScoreEntry(TypedDict):
+    user_id: str
+    dimension: str
+    value: float
+    window: str
+
+
+def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[ScoreEntry]:
     # scores[user][dimension] = value
     scores: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     # fairness counters per user-kind-day
     counters: dict[tuple[str, str, str], int] = defaultdict(int)
     fair_default = rules.fairness or {}
-    import os
     try:
         self_repo_penalty = float(os.getenv("OSSMK_SELF_REPO_PENALTY", "1.0"))
     except Exception:
@@ -97,8 +111,11 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[di
         window_days = rules.decay_window_days or 0.0
     for ev in events:
         kind = ev.kind.value if hasattr(ev.kind, "value") else str(ev.kind)
-        day = getattr(ev, "created_at", None)
-        day_key = str(getattr(day, "date", lambda: None)() or getattr(day, "split", lambda _: "")("T")[0])
+        # created_at is datetime (Pydantic parses), guard just in case
+        try:
+            day_key = ev.created_at.date().isoformat()
+        except Exception:
+            day_key = ""
         if day_key and kind in fair_default:
             key = (ev.user_id, kind, day_key)
             counters[key] += 1
@@ -110,7 +127,7 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[di
                 w = spec.get("weights_by_kind", {}).get(kind, spec.get("weight", 1.0))
                 # penalize self-repo events if configured
                 try:
-                    host, owner, _name = (ev.repo_id or "///").split("/", 2)
+                    _, owner, _ = (ev.repo_id or "///").split("/", 2)
                 except Exception:
                     owner = ""
                 if self_repo_penalty < 1.0 and owner and ev.user_id and ev.user_id.lower() == owner.lower():
@@ -139,8 +156,8 @@ def score_events(events: Iterable[ContributionEvent], rules: RuleSet) -> list[di
                         pass
                 scores[ev.user_id][dim] += float(w)
     # flatten
-    out: list[dict] = []
+    out: list[ScoreEntry] = []
     for user, dims in scores.items():
         for dim, val in dims.items():
-            out.append({"user_id": user, "dimension": dim, "value": val, "window": "all"})
+            out.append(ScoreEntry(user_id=user, dimension=dim, value=float(val), window="all"))
     return out
