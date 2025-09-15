@@ -6,4 +6,20 @@ dist/
 build/
 *.egg-info/
 .venv/
+
+# Local developer logs and notes (do not commit)
+DEVLOG.md
+DEVLOG.local.md
+
+# Closed-source/BoostBit proprietary assets (ignored by default)
+private/
+boostbit/
+**/boostbit_rules.toml
+**/proprietary_rules.toml
+**/proprietary/
+*.secrets.toml
+*.secrets.yaml
+*.secrets.yml
+*.env
+secrets/
 uv.lock
