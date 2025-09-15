@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import os
-from datetime import datetime, timedelta, UTC
 import asyncio
+from datetime import UTC, datetime, timedelta
+import os
 
+from dateutil import parser as dateutil_parser
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from dateutil import parser as dateutil_parser
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 def get_logger() -> structlog.stdlib.BoundLogger:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
-import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+import os
+import sqlite3
 from typing import Any
-from collections.abc import Iterable
 
 from .base import StorageBackend
 from ossmk.core.models import ContributionEvent
