@@ -32,6 +32,41 @@ def github_token_from_env() -> str:
     return token
 
 
+def github_app_headers() -> dict[str, str] | None:
+    """Return headers for GitHub App installation token if configured.
+
+    Requires env: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PEM), GITHUB_APP_INSTALLATION_ID.
+    """
+    app_id = os.getenv("GITHUB_APP_ID")
+    pem = os.getenv("GITHUB_APP_PRIVATE_KEY")
+    inst_id = os.getenv("GITHUB_APP_INSTALLATION_ID")
+    if not (app_id and pem and inst_id):
+        return None
+    try:
+        import jwt  # PyJWT
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError("PyJWT not installed. pip install 'oss-metrics-kit[github-app]'") from e
+
+    now = int(datetime.now(timezone.utc).timestamp())
+    payload = {"iat": now - 60, "exp": now + 9 * 60, "iss": app_id}
+    encoded = jwt.encode(payload, pem, algorithm="RS256")
+    with httpx.Client(timeout=30) as client:
+        r = client.post(
+            f"https://api.github.com/app/installations/{inst_id}/access_tokens",
+            headers={"Authorization": f"Bearer {encoded}", "Accept": "application/vnd.github+json"},
+        )
+        r.raise_for_status()
+        token = r.json()["token"]
+    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+
+def github_auth_headers() -> dict[str, str]:
+    app = github_app_headers()
+    if app:
+        return app
+    return {"Authorization": f"Bearer {github_token_from_env()}", "Accept": "application/vnd.github+json"}
+
+
 def http_client() -> httpx.Client:
     return httpx.Client(timeout=30.0, headers={"User-Agent": "ossmk/0.0.1"})
 

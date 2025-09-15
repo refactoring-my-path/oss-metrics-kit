@@ -148,3 +148,39 @@ def rules_llm(
     with open(out, "w", encoding="utf-8") as f:
         f.write(toml_text)
     rprint({"rules": out})
+
+
+@app.command("rules-test")
+def rules_test(
+    events: str = typer.Option(..., help="Input events JSON path"),
+    rules: str = typer.Option("default", help="Rule set id or TOML file path"),
+    expect_total_min: float | None = typer.Option(None, help="Assert sum(scores) >= value"),
+    expect_dim: list[str] = typer.Option(None, help="Assertions like code>=10; multiple allowed", rich_help_panel="Expectations"),
+) -> None:
+    """Test rules against sample events with simple assertions."""
+    data = _read_json_input(events)
+    evs = [ContributionEvent.model_validate(e) for e in data]
+    rs = load_rules(rules)
+    scores = score_events(evs, rs)
+    # aggregate
+    total = sum(float(s["value"]) for s in scores)
+    by_dim: dict[str, float] = {}
+    for s in scores:
+        by_dim[s["dimension"]] = by_dim.get(s["dimension"], 0.0) + float(s["value"])
+    # assertions
+    ok = True
+    msgs = []
+    if expect_total_min is not None and total < expect_total_min:
+        ok = False
+        msgs.append(f"total {total} < {expect_total_min}")
+    if expect_dim:
+        for expr in expect_dim:
+            if ">=" in expr:
+                dim, val = expr.split(">=", 1)
+                dim = dim.strip()
+                if by_dim.get(dim, 0.0) < float(val):
+                    ok = False
+                    msgs.append(f"{dim} {by_dim.get(dim, 0.0)} < {val}")
+    rprint({"total": total, "by_dimension": by_dim, "ok": ok, "failures": msgs})
+    if not ok:
+        raise typer.Exit(code=1)
