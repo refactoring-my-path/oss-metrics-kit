@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, UTC
-from typing import Iterable
+from datetime import UTC, datetime
+from collections.abc import Iterable
 
 import psycopg
 
@@ -68,7 +68,16 @@ def save_events(conn: psycopg.Connection, events: Iterable[ContributionEvent]) -
     with conn.cursor() as cur:
         cur.executemany(
             """
-            INSERT INTO ossmk_events (id, kind, repo_id, user_id, created_at, lines_added, lines_removed, source_host)
+            INSERT INTO ossmk_events (
+                id,
+                kind,
+                repo_id,
+                user_id,
+                created_at,
+                lines_added,
+                lines_removed,
+                source_host
+            )
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (id) DO NOTHING
             """,

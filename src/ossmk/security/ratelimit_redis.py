@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 try:
     import redis  # type: ignore
-except Exception as e:  # pragma: no cover
+except Exception:  # pragma: no cover
     redis = None  # type: ignore
 
 

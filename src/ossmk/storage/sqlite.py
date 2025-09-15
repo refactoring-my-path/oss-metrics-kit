@@ -4,7 +4,8 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from .base import StorageBackend
 from ossmk.core.models import ContributionEvent
@@ -39,7 +40,7 @@ class HttpCache:
         )
         return conn
 
-    def get(self, url: str) -> Optional[dict[str, Any]]:
+    def get(self, url: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             cur = conn.execute(
                 "SELECT etag, last_modified, body, fetched_at FROM http_cache WHERE url=?",
@@ -56,10 +57,20 @@ class HttpCache:
                 "fetched_at": fetched_at,
             }
 
-    def set(self, url: str, etag: Optional[str], last_modified: Optional[str], body: str, fetched_at: str) -> None:
+    def set(
+        self,
+        url: str,
+        etag: str | None,
+        last_modified: str | None,
+        body: str,
+        fetched_at: str,
+    ) -> None:
         with self._connect() as conn:
             conn.execute(
-                "REPLACE INTO http_cache(url, etag, last_modified, body, fetched_at) VALUES (?, ?, ?, ?, ?)",
+                (
+                    "REPLACE INTO http_cache(url, etag, last_modified, body, fetched_at) "
+                    "VALUES (?, ?, ?, ?, ?)"
+                ),
                 (url, etag, last_modified, body, fetched_at),
             )
 
@@ -124,7 +135,16 @@ class SQLiteStorage(StorageBackend):
         with self._conn as conn:
             conn.executemany(
                 """
-                INSERT OR IGNORE INTO ossmk_events (id, kind, repo_id, user_id, created_at, lines_added, lines_removed, source_host)
+                INSERT OR IGNORE INTO ossmk_events (
+                    id,
+                    kind,
+                    repo_id,
+                    user_id,
+                    created_at,
+                    lines_added,
+                    lines_removed,
+                    source_host
+                )
                 VALUES (?,?,?,?,?,?,?,?)
                 """,
                 rows,
@@ -133,16 +153,31 @@ class SQLiteStorage(StorageBackend):
 
     def save_scores(self, scores: list[dict]) -> int:
         rows = [
-            (s["user_id"], s["dimension"], float(s["value"]), s.get("window", "all"), "now") for s in scores
+            (
+                s["user_id"],
+                s["dimension"],
+                float(s["value"]),
+                s.get("window", "all"),
+                "now",
+            )
+            for s in scores
         ]
         if not rows:
             return 0
         with self._conn as conn:
             conn.executemany(
                 """
-                INSERT INTO ossmk_scores (user_id, dimension, value, window, generated_at)
+                INSERT INTO ossmk_scores (
+                    user_id,
+                    dimension,
+                    value,
+                    window,
+                    generated_at
+                )
                 VALUES (?,?,?,?,?)
-                ON CONFLICT(user_id, dimension, window) DO UPDATE SET value=excluded.value, generated_at=excluded.generated_at
+                ON CONFLICT(user_id, dimension, window) DO UPDATE SET
+                    value=excluded.value,
+                    generated_at=excluded.generated_at
                 """,
                 rows,
             )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Iterable
+from collections.abc import Iterable
 
 from ossmk.core.models import ContributionEvent
 
@@ -41,4 +41,3 @@ def open_backend(dsn: str) -> StorageBackend:
 
         return SQLiteStorage(dsn)
     raise ValueError(f"Unsupported DSN: {dsn}")
-
