@@ -59,5 +59,25 @@ class GitHubProvider:
             )
         return events
 
+    def fetch_user_repos(self, login: str) -> list[str]:
+        url = f"https://api.github.com/users/{login}/repos?per_page=100&type=owner&sort=updated"
+        with http_client() as client:
+            data = self._cached_get_json(client, url)
+        full_names = [item.get("full_name") for item in data if item.get("full_name")]
+        return [str(x) for x in full_names]
+
+    def fetch_user_contributions(self, login: str, max_repos: int | None = 20) -> list[ContributionEvent]:
+        repos = self.fetch_user_repos(login)
+        if max_repos is not None:
+            repos = repos[:max_repos]
+        all_events: list[ContributionEvent] = []
+        for repo in repos:
+            try:
+                all_events.extend(self.fetch_repo_issues_and_prs(repo))
+            except httpx.HTTPStatusError as e:
+                # skip inaccessible repos gracefully
+                continue
+        return all_events
+
 
 provider = GitHubProvider()
