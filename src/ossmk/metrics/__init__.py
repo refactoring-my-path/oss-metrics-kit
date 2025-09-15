@@ -16,8 +16,12 @@ except Exception:  # pragma: no cover
     trace = None  # type: ignore
 
 
-REQUESTS = Counter("ossmk_requests_total", "Total HTTP requests", ["op"]) if Counter else None
-LATENCY = Histogram("ossmk_request_latency_seconds", "HTTP request latency", ["op"]) if Histogram else None
+REQUESTS = (
+    Counter("ossmk_requests_total", "Total HTTP requests", ["op"]) if Counter else None
+)
+LATENCY = (
+    Histogram("ossmk_request_latency_seconds", "HTTP request latency", ["op"]) if Histogram else None
+)
 
 
 @contextmanager
@@ -45,7 +49,9 @@ def init_sentry_from_env() -> None:
     try:
         import sentry_sdk  # type: ignore
 
-        sentry_sdk.init(dsn=dsn, traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")))
+        sentry_sdk.init(
+            dsn=dsn,
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+        )
     except Exception:
         pass
-

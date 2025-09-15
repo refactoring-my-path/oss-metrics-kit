@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import Any
 
 import httpx
@@ -9,17 +10,16 @@ import httpx
 from ossmk.core.models import ContributionEvent, EventKind
 from ossmk.storage.sqlite import HttpCache
 from ossmk.utils import (
+    github_auth_headers,
+    http_async_client,
     http_client,
     http_get,
-    utcnow_iso,
-    parse_link_next,
-    parse_since,
-    http_async_client,
     http_get_async,
     is_bot_login,
-    github_auth_headers,
+    parse_link_next,
+    parse_since,
+    utcnow_iso,
 )
-import os
 
 
 class GitHubProvider:
@@ -31,7 +31,9 @@ class GitHubProvider:
     def _auth_headers(self) -> dict[str, str]:
         return github_auth_headers()
 
-    def _cached_get_json(self, client: httpx.Client, url: str) -> tuple[list[dict[str, Any]], str | None, httpx.Response]:
+    def _cached_get_json(
+        self, client: httpx.Client, url: str
+    ) -> tuple[list[dict[str, Any]], str | None, httpx.Response]:
         headers = self._auth_headers()
         cached = self.cache.get(url)
         if cached and cached.get("etag"):
@@ -114,7 +116,11 @@ class GitHubProvider:
                 with record("github.commits"):
                     data, next_url, _ = self._cached_get_json(client, url)
                 for c in data:
-                    author = (c.get("author") or {}).get("login") or (c.get("committer") or {}).get("login") or "unknown"
+                    author = (
+                        (c.get("author") or {}).get("login")
+                        or (c.get("committer") or {}).get("login")
+                        or "unknown"
+                    )
                     if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(author):
                         continue
                     events.append(
@@ -181,7 +187,9 @@ class GitHubProvider:
         full_names = [item.get("full_name") for item in data if item.get("full_name")]
         return [str(x) for x in full_names]
 
-    def fetch_user_contributions(self, login: str, max_repos: int | None = 20, since: str | None = None) -> list[ContributionEvent]:
+    def fetch_user_contributions(
+        self, login: str, max_repos: int | None = 20, since: str | None = None
+    ) -> list[ContributionEvent]:
         repos = self.fetch_user_repos(login)
         if max_repos is not None:
             repos = repos[:max_repos]
@@ -223,7 +231,9 @@ class GitHubProvider:
         await asyncio.gather(*(fetch_repo(r) for r in repos))
         return events
 
-    async def _fetch_repo_commits_async(self, repo: str, since: str | None = None) -> list[ContributionEvent]:
+    async def _fetch_repo_commits_async(
+        self, repo: str, since: str | None = None
+    ) -> list[ContributionEvent]:
         owner, name = repo.split("/", 1)
         params = "per_page=100"
         iso_since = parse_since(since)
@@ -237,7 +247,11 @@ class GitHubProvider:
             while True:
                 data, next_url, _ = await self._cached_get_json_async(client, url)
                 for c in data:
-                    author = (c.get("author") or {}).get("login") or (c.get("committer") or {}).get("login") or "unknown"
+                    author = (
+                        (c.get("author") or {}).get("login")
+                        or (c.get("committer") or {}).get("login")
+                        or "unknown"
+                    )
                     events.append(
                         ContributionEvent(
                             id=str(c.get("sha")),
@@ -254,7 +268,9 @@ class GitHubProvider:
                 url = next_url
         return events
 
-    async def _fetch_repo_reviews_async(self, repo: str, max_prs: int | None = 50) -> list[ContributionEvent]:
+    async def _fetch_repo_reviews_async(
+        self, repo: str, max_prs: int | None = 50
+    ) -> list[ContributionEvent]:
         owner, name = repo.split("/", 1)
         pr_url = f"https://api.github.com/repos/{owner}/{name}/pulls?state=all&per_page=100&sort=updated"
         events: list[ContributionEvent] = []
@@ -326,8 +342,7 @@ class GitHubProvider:
                 nodes = search.get("nodes") or []
                 for n in nodes:
                     repo = (n.get("repository") or {}).get("nameWithOwner") or "unknown/unknown"
-                    is_pr = "number" in n and (n.get("__typename", "") == "PullRequest" or "id" in n)
-                    kind = EventKind.pr if "PullRequest" in str(n) else (EventKind.issue)
+                    kind = EventKind.pr if "PullRequest" in str(n) else EventKind.issue
                     events.append(
                         ContributionEvent(
                             id=str(n.get("id")),
@@ -345,7 +360,9 @@ class GitHubProvider:
                 after = page.get("endCursor")
         return events
 
-    async def fetch_repo_commits_graphql_async(self, repo: str, since: str | None = None) -> list[ContributionEvent]:
+    async def fetch_repo_commits_graphql_async(
+        self, repo: str, since: str | None = None
+    ) -> list[ContributionEvent]:
         """Fetch commits via GraphQL commit history on default branch."""
         owner, name = repo.split("/", 1)
         url = "https://api.github.com/graphql"
@@ -372,7 +389,9 @@ class GitHubProvider:
                 if after:
                     # GitTimestamp doesn't take cursor; after applies to connection
                     pass
-                resp = await client.post(url, headers=headers, json={"query": query, "variables": variables})
+                resp = await client.post(
+                    url, headers=headers, json={"query": query, "variables": variables}
+                )
                 resp.raise_for_status()
                 data = resp.json().get("data") or {}
                 repo_data = (data.get("repository") or {}).get("defaultBranchRef") or {}
@@ -380,7 +399,8 @@ class GitHubProvider:
                 history = (target.get("history") or {})
                 nodes = history.get("nodes") or []
                 for n in nodes:
-                    login = (((n.get("author") or {}).get("user") or {}) or {}).get("login") or "unknown"
+                    au = (n.get("author") or {}).get("user") or {}
+                    login = au.get("login") or "unknown"
                     if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(login):
                         continue
                     events.append(

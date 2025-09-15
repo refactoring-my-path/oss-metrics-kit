@@ -11,7 +11,7 @@ def write_json(data: Any, out: str = "-") -> None:
     if out == "-":
         sys.stdout.write(buf + "\n")
     else:
-        with io.open(out, "w", encoding="utf-8") as f:
+        with open(out, "w", encoding="utf-8") as f:
             f.write(buf)
 
 
