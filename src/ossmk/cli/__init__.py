@@ -9,6 +9,11 @@ import typer
 from rich import print as rprint
 
 from ossmk.exporters.json import write_json
+from typing import Optional
+try:
+    from ossmk.exporters.parquet import write_parquet
+except Exception:  # pragma: no cover - optional
+    write_parquet = None  # type: ignore
 from ossmk.providers.github import provider as github_provider
 from ossmk.core.services.score import score_events, load_rules
 from ossmk.core.services.analyze import analyze_github_user
@@ -30,17 +35,26 @@ def version() -> None:
 def fetch(
     provider: str = typer.Option("github", help="Provider id (e.g., github)"),
     repo: str = typer.Option(..., help="Target repo full name (owner/name)"),
-    out: str = typer.Option("-", help="Output destination (path or - for stdout)"),
+    out: str = typer.Option("-", help="Output destination. Use parquet:/path to write Parquet."),
     since: str | None = typer.Option(None, help="Time window filter, e.g., '30d' or ISO-8601"),
+    api: str = typer.Option("rest", help="API mode: rest|graphql|auto"),
 ) -> None:
     """Fetch contribution data and output normalized events as JSON."""
     if provider != "github":
         raise typer.BadParameter("Only 'github' provider is currently supported")
     events = []
-    events.extend(github_provider.fetch_repo_issues_and_prs(repo))
-    events.extend(github_provider.fetch_repo_commits(repo, since=since))
-    events.extend(github_provider.fetch_repo_pr_reviews(repo))
-    write_json([e.model_dump() for e in events], out=out)
+    if api in ("rest", "auto"):
+        events.extend(github_provider.fetch_repo_issues_and_prs(repo))
+        events.extend(github_provider.fetch_repo_commits(repo, since=since))
+        events.extend(github_provider.fetch_repo_pr_reviews(repo))
+    # graphql path for repo-scope is non-trivial; kept for user-scope below.
+    payload = [e.model_dump() for e in events]
+    if out.startswith("parquet:"):
+        if not write_parquet:
+            raise typer.BadParameter("Parquet support requires 'pyarrow'. Install extras: pip install 'oss-metrics-kit[exporters-parquet]'")
+        write_parquet(payload, out.split(":", 1)[1])
+    else:
+        write_json(payload, out=out)
 
 
 def _read_json_input(path: str) -> Any:
@@ -68,20 +82,29 @@ def score(
 def analyze_user(
     login: str = typer.Argument(..., help="GitHub login"),
     rules: str = typer.Option("default", help="Rule set id or TOML file path"),
-    out: str = typer.Option("-", help="Output destination (path or - for stdout)"),
+    out: str = typer.Option("-", help="Output destination. Use parquet:/path for scores Parquet."),
     save_pg: bool = typer.Option(False, help="Save events and scores to Postgres"),
     pg_dsn: str | None = typer.Option(None, help="Postgres DSN (overrides env)"),
     since: str | None = typer.Option("90d", help="Time window filter for commits, e.g., '90d'"),
+    api: str = typer.Option("auto", help="API mode: rest|graphql|auto"),
 ) -> None:
     """Analyze a GitHub user: fetch -> score -> output, optionally persist to Postgres."""
-    result = analyze_github_user(login, rules=rules, since=since)
+    result = analyze_github_user(login, rules=rules, since=since, api=api)
     # output
-    write_json({
+    obj = {
         "user": result.user,
         "events_count": result.events_count,
         "scores": result.scores,
         "summary": result.summary,
-    }, out=out)
+    }
+    if out.startswith("parquet:"):
+        if not write_parquet:
+            raise typer.BadParameter("Parquet support requires 'pyarrow'. Install extras: pip install 'oss-metrics-kit[exporters-parquet]'")
+        # For Parquet, we write scores table and still print summary to stdout for quick feedback.
+        write_parquet(result.scores, out.split(":", 1)[1])
+        rprint({"summary": result.summary, "scores_parquet": out.split(":", 1)[1]})
+    else:
+        write_json(obj, out=out)
     # optional persistence
     if save_pg:
         with pg_connect(pg_dsn) as conn:
