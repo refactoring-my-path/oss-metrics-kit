@@ -66,7 +66,7 @@ ossmk analyze-user <your_github_login> --save-pg
 プロプライエタリな重み付け（任意）
 
 ```bash
-export BOOSTBIT_RULES_FILE=/absolute/path/to/private/boostbit_rules.toml
+export OSSMK_RULES_FILE=/absolute/path/to/private/rules.toml
 ossmk analyze-user <your_github_login> --out -
 ```
 
@@ -90,10 +90,18 @@ ossmk analyze-user <your_github_login> --out -
 
 - トークンは環境変数（`GITHUB_TOKEN`/`GH_TOKEN`）で管理し、ログに出さない。
 - レート制限はバックエンドの責務。例として `ossmk.security.ratelimit.RateLimiter` を提供（本番はRedis等で共有化）。
-- 私有ルール（TOML）はリポ外に保管し、`BOOSTBIT_RULES_FILE` で指定。`rules=auto|default` で自動ロード。
+- 私有ルール（TOML）はリポ外に保管し、`OSSMK_RULES_FILE` で指定。`rules=auto|default` で自動ロード。
 - 依存はエクストラで分離（Postgres/Parquet/LLM）。最小構成で運用可能。
 
 バックエンド統合の詳細は `docs/INTEGRATION.md` を参照。
+
+## 環境変数（まとめ）
+
+- `GITHUB_TOKEN` or `GH_TOKEN`: GitHub APIトークン（必須）
+- `OSSMK_RULES_FILE`: 私有ルールTOMLへのパス（任意）
+- `OSSMK_PG_DSN` or `DATABASE_URL`: Postgres DSN（保存時に使用する場合）
+- `REDIS_URL`: Redisレートリミッタで使用（任意）
+- `OSSMK_MAX_SINCE_DAYS`: `since` の最大日数（デフォルト180）
 
 ## PyPI公開手順（メンテナ向け）
 

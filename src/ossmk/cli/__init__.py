@@ -19,6 +19,7 @@ from ossmk.core.services.score import score_events, load_rules
 from ossmk.core.services.analyze import analyze_github_user
 from ossmk.storage.base import open_backend
 from ossmk.core.rules.llm import LLMConfig, suggest_rules_from_events
+from ossmk.utils import parse_since
 from ossmk.core.models import ContributionEvent
 
 app = typer.Typer(help="OSS Metrics Kit CLI")
@@ -90,6 +91,12 @@ def analyze_user(
     api: str = typer.Option("auto", help="API mode: rest|graphql|auto"),
 ) -> None:
     """Analyze a GitHub user: fetch -> score -> output, optionally persist to Postgres."""
+    # Validate login
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", login or ""):
+        raise typer.BadParameter("Invalid GitHub login. Use profile name like 'octocat'.")
+    # Clamp since (max 180d)
+    _ = parse_since(since, max_days=180)
     result = analyze_github_user(login, rules=rules, since=since, api=api)
     # output
     obj = {

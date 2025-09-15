@@ -1,6 +1,6 @@
-# Backend Integration Guide (BoostBit)
+# Backend Integration Guide
 
-This document describes how to integrate `oss-metrics-kit` into the existing BoostBit backend (Postgres + web API).
+This document describes how to integrate `oss-metrics-kit` into an existing backend (Postgres + web API).
 
 ## Install in backend
 
@@ -13,7 +13,9 @@ This document describes how to integrate `oss-metrics-kit` into the existing Boo
 
 - `GITHUB_TOKEN` or `GH_TOKEN`: GitHub API token (required)
 - `OSSMK_PG_DSN` or `DATABASE_URL`: Postgres DSN for persistence, e.g. `postgresql://user:pass@host:5432/db`
-- Optional rules override: `BOOSTBIT_RULES_FILE` pointing to TOML.
+- Optional rules override: `OSSMK_RULES_FILE` pointing to TOML.
+- Optional since bound: `OSSMK_MAX_SINCE_DAYS` (default 180)
+- Optional Redis URL for limiter: `REDIS_URL` (if you use Redis limiter)
 
 ## Programmatic API (recommended)
 
@@ -72,8 +74,8 @@ def analyze(user_id: str, github_login: str, rules: str = "auto", since: str = "
 
 ### Private rules
 
-- Store proprietary TOML rules outside the repo (e.g., `private/boostbit_rules.toml`).
-- Point `BOOSTBIT_RULES_FILE` to that path; passing `rules="default"` or `rules="auto"` will load it.
+- Store proprietary TOML rules outside the repo (e.g., `private/ossmk_rules.toml`).
+- Point `OSSMK_RULES_FILE` to that path; passing `rules="default"` or `rules="auto"` will load it.
 
 ## Data model (persistence)
 
@@ -82,8 +84,8 @@ def analyze(user_id: str, github_login: str, rules: str = "auto", since: str = "
 
 ## Extending rules (closed-source)
 
-- Place a TOML rules file in a private path (e.g., `private/boostbit_rules.toml`).
-- Set `BOOSTBIT_RULES_FILE=/path/to/boostbit_rules.toml` in the backend environment.
+- Place a TOML rules file in a private path (e.g., `private/ossmk_rules.toml`).
+- Set `OSSMK_RULES_FILE=/path/to/ossmk_rules.toml` in the backend environment.
 - The analyzer will load those rules automatically when `rules="default"` is passed.
 
 ```toml
@@ -100,3 +102,74 @@ weight = 0.7
 
 - Current GitHub provider fetches issues/PRs per repo and the list of user repos (first page). For large accounts, implement pagination and parallelism as needed.
 - HTTP requests use ETag caching when possible and exponential backoff retries.
+
+## OAuth callback example (FastAPI)
+
+```python
+from fastapi import FastAPI, Request
+import httpx
+
+app = FastAPI()
+
+GITHUB_CLIENT_ID = os.environ["GITHUB_CLIENT_ID"]
+GITHUB_CLIENT_SECRET = os.environ["GITHUB_CLIENT_SECRET"]
+
+@app.get("/oauth/github/callback")
+async def oauth_callback(request: Request, code: str, state: str | None = None):
+    # 1) Exchange code for access token
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={
+                "client_id": GITHUB_CLIENT_ID,
+                "client_secret": GITHUB_CLIENT_SECRET,
+                "code": code,
+            },
+        )
+        resp.raise_for_status()
+        token = resp.json()["access_token"]
+
+    # 2) Fetch login of the authenticated user
+    async with httpx.AsyncClient() as client:
+        me = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+        )
+        me.raise_for_status()
+        login = me.json()["login"]
+
+    # 3) Call your analyze endpoint/workflow using that login; persist scores and render UI
+    # e.g., enqueue a job or call analyze_github_user(login, ...)
+    return {"login": login}
+```
+
+## OAuth callback example (Express)
+
+```js
+import express from 'express';
+import fetch from 'node-fetch';
+
+const app = express();
+const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
+const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
+
+app.get('/oauth/github/callback', async (req, res) => {
+  const { code } = req.query;
+  const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { 'Accept': 'application/json' },
+    body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, code }),
+  });
+  const { access_token } = await tokenRes.json();
+  const meRes = await fetch('https://api.github.com/user', {
+    headers: { Authorization: `Bearer ${access_token}`, Accept: 'application/vnd.github+json' },
+  });
+  const me = await meRes.json();
+  const login = me.login;
+  // Enqueue analysis job or call your backend workflow with `login`
+  res.json({ login });
+});
+
+app.listen(3000);
+```

@@ -43,6 +43,7 @@ all = ["pyarrow>=15", "duckdb>=1.0"]
 exporters-postgres = ["psycopg[binary]>=3.2"]
 llm-openai = ["openai>=1.40"]
 llm-anthropic = ["anthropic>=0.34"]
+redis = ["redis>=5"]
 
 [project.scripts]
 ossmk = "ossmk.cli:app"
