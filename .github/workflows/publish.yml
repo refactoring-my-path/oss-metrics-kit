@@ -1,24 +1,51 @@
-name: Publish to PyPI
+name: Release
 
 on:
   release:
     types: [published]
+  workflow_dispatch: {}
 
 jobs:
   build-and-publish:
+    name: Build and publish to PyPI/TestPyPI
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-    environment: pypi
+      id-token: write  # for PyPI Trusted Publishing (OIDC)
     steps:
-      - uses: actions/checkout@v4
-      - name: Install uv
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
         run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-      - name: Build
-        run: uv build
-      - name: Publish to PyPI
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check distribution metadata
+        run: python -m twine check dist/*
+
+      - name: Publish to TestPyPI (pre-release)
+        if: ${{ github.event.release.prerelease }}
         uses: pypa/gh-action-pypi-publish@release/v1
-        # OIDC Trusted Publishing: no password needed
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+          # If not using Trusted Publishing, uncomment and set secret:
+          # password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+      - name: Publish to PyPI
+        if: ${{ !github.event.release.prerelease }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          # If not using Trusted Publishing, uncomment and set secret:
+          # password: ${{ secrets.PYPI_API_TOKEN }}
+
