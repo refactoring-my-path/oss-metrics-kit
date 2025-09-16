@@ -432,10 +432,8 @@ class GitHubProvider:
                 )
                 resp.raise_for_status()
                 data = cast(dict[str, Any], resp.json().get("data") or {})
-                repo_data = cast(
-                    dict[str, Any],
-                    cast(dict[str, Any], data.get("repository") or {}).get("defaultBranchRef") or {},
-                )
+                repo_obj = cast(dict[str, Any], data.get("repository") or {})
+                repo_data = cast(dict[str, Any], repo_obj.get("defaultBranchRef") or {})
                 target = cast(dict[str, Any], repo_data.get("target") or {})
                 history = cast(dict[str, Any], (target.get("history") or {}))
                 nodes = cast(list[Any], history.get("nodes") or [])

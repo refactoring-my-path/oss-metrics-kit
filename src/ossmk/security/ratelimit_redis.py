@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any
-
-from typing import cast
+from typing import Any, cast
 
 try:
     import redis as _redis  # type: ignore[reportMissingImports]
