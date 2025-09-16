@@ -4,6 +4,53 @@ Toolkit to fetch, normalize, score, and export OSS contribution data — end to 
 
 Status: early stage; CLI and core models are available and expanding.
 
+What you can do in 5 minutes
+- Analyze a GitHub user’s activity and get a simple score summary.
+- Save scores into SQLite or Postgres for dashboards.
+- Export scores to Parquet for data tools.
+- Optionally, let an LLM suggest a rules TOML from your events.
+
+## Quick Start (Beginner-friendly)
+
+1) Install the package (pick one)
+
+- pip (recommended for users): `pip install oss-metrics-kit`
+- uv (recommended for devs): `uv venv .venv && source .venv/bin/activate && uv sync --dev`
+
+2) Set a GitHub token (read-only is enough)
+
+```
+export GITHUB_TOKEN=ghp_xxx   # or GH_TOKEN
+```
+
+3) Analyze your account and print results
+
+```
+ossmk analyze-user <your_github_login> --since 90d --api auto --out -
+```
+
+4) Save scores (SQLite for a quick try)
+
+```
+ossmk analyze-user <your_github_login> --out scores.json
+ossmk save sqlite:///./metrics.db --input scores.json
+```
+
+5) Export scores to Parquet (for data tools)
+
+```
+pip install "oss-metrics-kit[exporters-parquet]"
+ossmk analyze-user <your_github_login> --out parquet:./scores.parquet
+```
+
+That’s it. See Getting Started for more step‑by‑step details.
+
+## Getting Started (Step-by-step)
+
+If you are new to Python tools or GitHub APIs, read:
+- docs/getting-started.md — a gentle, copy‑paste tutorial with expected outputs.
+- docs/usage.md — command reference with CI examples.
+
 ## Install (development)
 
 Use a virtual environment (venv/conda/uv) and install editable:
@@ -33,28 +80,16 @@ Note: Running `ossmk` requires installation. For direct runs during development,
 - Stable: `pip install oss-metrics-kit`
 - With Postgres exporter: `pip install "oss-metrics-kit[exporters-postgres]"`
 
-## Quick start (your GitHub account)
+## Examples
 
-Set a GitHub token (read-only is enough):
-
-```
-export GITHUB_TOKEN=ghp_xxx   # or GH_TOKEN
-```
-
-Analyze and print summary + scores:
-
-```
-ossmk analyze-user <your_github_login> --out -
-```
-
-Persist scores into Postgres (optional):
+- Persist scores to Postgres:
 
 ```
 export OSSMK_PG_DSN="postgresql://user:pass@host:5432/db"
 ossmk analyze-user <your_github_login> --save-pg
 ```
 
-Load proprietary rules (optional):
+- Load proprietary rules (TOML):
 
 ```
 export OSSMK_RULES_FILE=/absolute/path/to/private/rules.toml
@@ -83,7 +118,7 @@ Storage is selected via DSN (Postgres/SQLite). Parquet output is available as an
 - Store private rule TOMLs outside the repo and point `OSSMK_RULES_FILE` to them. `rules=auto|default` will load it.
 - Optional features (Postgres/Parquet/LLM) are separated as extras.
 
-See `docs/INTEGRATION.md` for backend integration. Development typing/lint policy: `docs/dev.md`. Detailed usage: `docs/usage.md`.
+See `docs/INTEGRATION.md` for backend integration. Development typing/lint policy: `docs/dev.md`. Detailed usage: `docs/usage.md`. A beginner tutorial is in `docs/getting-started.md`.
 
 ## Environment variables
 

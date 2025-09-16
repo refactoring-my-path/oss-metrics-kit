@@ -32,6 +32,39 @@ Notes:
 - For Trusted Publishing, register this repository and `publish.yml` in the PyPI project settings.
 - If using tokens instead, set `PYPI_API_TOKEN`/`TEST_PYPI_API_TOKEN` secrets and uncomment the password lines in the workflow.
 
+### GitHub Release UI (what to enter)
+
+- Release title: `vX.Y.Z` (match the tag). Optionally add a short name, e.g., `v1.2.0 – Scoring tweaks`.
+- Release notes: include at least these sections:
+  - Highlights: 2–5 bullets of what matters.
+  - Changes: user‑visible changes, new commands/options.
+  - Breaking changes: what to do to upgrade.
+  - Installation: reminder (pip install / extras if changed).
+  - Thanks: contributors (optional).
+
+Template:
+
+```
+## Highlights
+- ...
+
+## Changes
+- ...
+
+## Breaking changes
+- ...
+
+## Installation
+pip install -U oss-metrics-kit
+
+## Thanks
+@user1 @user2
+```
+
+- Pre‑release checkbox:
+  - Check it for rc/beta/preview builds you don’t want on production PyPI (workflow will publish to TestPyPI).
+  - Leave it unchecked for stable releases (workflow will publish to PyPI).
+
 ### Manual publish (alternative)
 
 #### Using uv
