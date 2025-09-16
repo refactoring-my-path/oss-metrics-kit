@@ -95,45 +95,7 @@ See `docs/INTEGRATION.md` for backend integration. Development typing/lint polic
 
 ## Publishing to PyPI (maintainers)
 
-Prepare
-
-- Create a PyPI account; optionally an API token (Upload scope) if not using Trusted Publishing.
-
-Versioning & tag
-
-- Update `version` in `pyproject.toml` (SemVer)
-- `git commit` → `git tag vX.Y.Z` → `git push --tags`
-
-Build (uv recommended)
-
-```
-uv build   # produces sdist(.tar.gz) + wheel(.whl) into dist/
-
-# Publish to TestPyPI (recommended)
-export PYPI_TOKEN_TEST=...
-uv publish --repository testpypi --token "$PYPI_TOKEN_TEST"
-
-# Publish to PyPI (match the tag)
-export PYPI_TOKEN=...
-uv publish --token "$PYPI_TOKEN"
-```
-
-Using twine (alternative)
-
-```
-python -m pip install build twine
-python -m build           # sdist + wheel to dist/
-python -m twine check dist/*
-twine upload --repository testpypi -u __token__ -p "$PYPI_TOKEN_TEST" dist/*
-twine upload -u __token__ -p "$PYPI_TOKEN" dist/*
-```
-
-Notes
-
-- Versions are immutable; bump SemVer for every release.
-- `pyproject.toml` metadata (URLs/license/description) appears on the project page.
-- Ship both sdist and wheel to maximize install success across environments.
-- Validate on TestPyPI first, then promote to PyPI.
+See `docs/RELEASING.md` for the full release flow (versioning, tagging, CI-based publish, and manual alternatives).
 
 ## Design highlights
 
@@ -155,4 +117,3 @@ Notes
 ## License
 
 Apache-2.0
-
