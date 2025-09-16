@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable
-from datetime import UTC, datetime
 from typing import Any, cast
 
 try:  # optional dependency at runtime

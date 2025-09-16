@@ -156,7 +156,11 @@ def rules_llm(
         events_list = [cast(dict[str, Any], e) for e in payload]
     else:
         raw_events = payload.get("events", [])
-        events_list = [cast(dict[str, Any], e) for e in raw_events] if isinstance(raw_events, list) else []
+        events_list = (
+            [cast(dict[str, Any], e) for e in raw_events]
+            if isinstance(raw_events, list)
+            else []
+        )
     cfg = LLMConfig(provider=provider, model=model, api_key=api_key)
     toml_text = suggest_rules_from_events(events_list, cfg)
     with open(out, "w", encoding="utf-8") as f:
