@@ -33,5 +33,4 @@ This document lists the main Python APIs and CLI commands exposed by the package
 
 ## Environment Variables
 
-See README “環境変数（まとめ）” for the full list.
-
+See README “Environment variables” for the full list.

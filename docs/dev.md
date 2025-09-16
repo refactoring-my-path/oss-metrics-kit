@@ -1,52 +1,52 @@
-# 開発者向けガイド（型・Lint ポリシー）
+# Developer Guide (Typing & Lint Policy)
 
-このドキュメントは、Pyright（strict）と Ruff を通すためのコーディング規約・実装パターンをまとめたものです。別セクションでも再利用できるよう、具体例とチェックリストを示します。
+This guide documents patterns that keep Pyright (strict) and Ruff green. Use it across modules and PRs.
 
-- 実行コマンド
+- Commands
   - Ruff: `uv run ruff check . --fix`
   - Pyright: `uv run pyright`
 
-- 設定要点
+- Settings
   - Pyright: `typeCheckingMode = "strict"`
   - Ruff: `line-length = 100`
 
-## 基本方針
+## Principles
 
-- 外部 API/JSON は Any/Unknown になりやすいので、層ごとに `cast` で辞書/配列へ段階的に型を絞る。
-- Optional 依存（psycopg/redis/PyJWT/openai/anthropic/otel/sentry 等）は import ガード＋ `Any` 経由で扱う。
-- Optional な属性アクセスは局所変数に退避して None ガードを入れる。
-- 行長 100 文字を超えない。多段 `cast` は中間変数で分割する。
-- ジェネリックの型引数を省略しない（例: `dict[str, Any]`）。
+- External API/JSON responses tend to be `Any`/`Unknown`. Narrow types layer by layer using `cast` to dict/list.
+- Optional dependencies (psycopg/redis/PyJWT/openai/anthropic/otel/sentry) should use import guards and go through `Any` when necessary.
+- For optional attribute access, assign to a local and check for `None` before dereferencing.
+- Keep lines under 100 chars. Break multi-cast expressions with intermediate variables.
+- Never omit generic params (use `dict[str, Any]`, not `dict`).
 
-## JSON/HTTP の扱い
+## JSON/HTTP handling
 
-悪い例（Unknown 連鎖）:
+Bad (Unknown propagation):
 
-```py
+```
 data = resp.json()
 repo = data["repository"]["name"]  # NG
 ```
 
-良い例（層ごとに絞る）:
+Good (narrow per layer):
 
-```py
+```
 from typing import Any, cast
 data = cast(dict[str, Any], resp.json())
 repo_obj = cast(dict[str, Any], data.get("repository") or {})
 name = cast(str, repo_obj.get("name") or "unknown")
 ```
 
-配列:
+Arrays:
 
-```py
+```
 nodes = cast(list[Any], data.get("nodes") or [])
 for n_any in nodes:
     n = cast(dict[str, Any], n_any)
 ```
 
-## Optional 依存（型スタブなし）
+## Optional deps (no type stubs)
 
-```py
+```
 try:
     import psycopg as _psycopg  # type: ignore[reportMissingImports]
     psycopg: Any | None = cast(Any, _psycopg)
@@ -59,35 +59,35 @@ conn: Any = psycopg.connect(dsn)
 
 OpenAI/Anthropic:
 
-```py
+```
 from openai import OpenAI  # type: ignore[reportMissingImports]
 client: Any = cast(Any, OpenAI(api_key=cfg.api_key))
 resp: Any = client.chat.completions.create(...)
 text = cast(str, resp.choices[0].message.content or "")
 ```
 
-Anthropic の content ブロックは `getattr(block, "text", "")` で安全に取り出す。
+Anthropic blocks: use `getattr(block, "text", "")` to avoid unknowns.
 
-## Optional 属性アクセス
+## Optional attribute access
 
-```py
+```
 cl = getattr(request, "client", None)
 ip = cl.host if cl is not None else "0.0.0.0"
 ```
 
-## Dict キー存在とインデックス
+## Dict key existence and indexing
 
-`get()` 連鎖で Unknown が出るときは、段階的に `cast` するか、キー存在を確認してからアクセス。
+Instead of deep `get()` chains, narrow stepwise or assert existence first.
 
-```py
+```
 author = cast(dict[str, Any], n.get("author") or {})
 user_obj = cast(dict[str, Any], author.get("user") or {})
 login = cast(str, user_obj.get("login") or "unknown")
 ```
 
-## CLI 入力の正規化
+## CLI input normalization
 
-```py
+```
 payload_list: list[Any]
 if isinstance(payload, list):
     payload_list = cast(list[Any], payload)
@@ -97,43 +97,43 @@ else:
 events: list[dict[str, Any]] = [cast(dict[str, Any], e) for e in payload_list]
 ```
 
-## Storage/Exporter の型付け
+## Storage/Exporter typing
 
-- `list[dict]` は禁止。`list[dict[str, Any]]` を使う。
-- 可変長引数は `*args: Any, **kwargs: Any` を付ける。
-- `pyarrow` などは `cast(Any, pa)` 経由で属性を呼ぶ。
+- Don’t use `list[dict]`; use `list[dict[str, Any]]`.
+- Annotate variadic args: `*args: Any, **kwargs: Any`.
+- Optional libs like `pyarrow`: go through `cast(Any, pa)` for attributes.
 
-## メトリクス/トレーシング
+## Metrics/Tracing
 
-```py
+```
 if trace is not None:
     tracer: Any = cast(Any, trace).get_tracer("ossmk")
     with tracer.start_as_current_span(op):
         ...
 ```
 
-## Ruff E501（行長）
+## Ruff E501 (line length)
 
-```py
-# 悪い
+```
+# Bad
 repo_data = cast(dict[str, Any], cast(dict[str, Any], data.get("repository") or {}).get("defaultBranchRef") or {})
-# 良い
+# Good
 repo_obj = cast(dict[str, Any], data.get("repository") or {})
 repo_data = cast(dict[str, Any], repo_obj.get("defaultBranchRef") or {})
 ```
 
-## Unnecessary cast の回避
+## Avoid unnecessary casts
 
-- 既に `Any` と分かっている値へ `cast(Any, ...)` を重ねない。
+If a value is already `Any`, don’t `cast(Any, ...)` again.
 
-## チェックリスト
+## Checklist
 
-- [ ] JSON は層ごとに `cast(dict[str, Any])` / `cast(list[Any])` を適用したか
-- [ ] Optional 依存は import ガード＋ `Any` で扱っているか
-- [ ] Optional 属性アクセスに None ガードを入れたか
-- [ ] `list[dict[str, Any]]` などジェネリックの型引数を省略していないか
-- [ ] 100 文字超の行を分割したか
-- [ ] 不要な `cast(Any, ...)` をしていないか
+- [ ] Apply `cast(dict[str, Any])` / `cast(list[Any])` per layer for JSON
+- [ ] Use import guards + `Any` for optional deps
+- [ ] Guard optional attributes against `None`
+- [ ] Provide generic type args (no bare `dict`/`list`)
+- [ ] Keep lines <= 100 chars (split complex casts)
+- [ ] Avoid unnecessary `cast(Any, ...)`
 
-このガイドに沿えば、strict な Pyright と Ruff を継続的に通しやすくなります。
+Following this guide keeps strict Pyright and Ruff happy across the codebase.
 
