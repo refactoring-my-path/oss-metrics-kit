@@ -1,175 +1,158 @@
 # oss-metrics-kit
 
-OSSの貢献データを「収集 → 正規化 → 指標算出 → 出力」まで一気通貫で扱うための基盤ライブラリ。
+Toolkit to fetch, normalize, score, and export OSS contribution data — end to end.
 
-現状: スタブ実装（CLI/エントリポイント/型モデルのみ）。ここから段階的に機能を追加します。
+Status: early stage; CLI and core models are available and expanding.
 
-## インストール（開発モード）
+## Install (development)
 
-以下はいずれかを実行してください。Conda/venv など任意の仮想環境上で実行を推奨します。
+Use a virtual environment (venv/conda/uv) and install editable:
 
-- `pip install -e .` もしくは
-- `python -m pip install -e .`
+- `pip install -e .` or `python -m pip install -e .`
+- Check CLI help with `ossmk --help`
 
-インストール後、以下でCLIのヘルプを確認できます。
+Note: Running `ossmk` requires installation. For direct runs during development, either install editable or set `PYTHONPATH=src` and run the entry point.
 
-- `ossmk --help`
+## Dev environment (uv recommended)
 
-注意: インストールせずに `ossmk` は使えません。開発中に直接実行したい場合は `pip install -e .` を行うか、`PYTHONPATH=src` を設定しつつエントリポイント経由で呼び出してください。
-
-## 開発環境（uv推奨）
-
-超高速パッケージマネージャー「uv」を利用すると、依存解決・仮想環境の同期が簡単になります。
-
-1) uvのインストール（どれか一つ）
+1) Install uv
 - macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - Homebrew: `brew install uv`
 - pipx: `pipx install uv`
 
-2) 仮想環境の作成と同期
-- `uv venv .venv`（任意）→ `source .venv/bin/activate`
-- 依存同期（本体＋開発用）: `uv sync --dev`
-- すべてのエクストラも入れる場合: `uv sync --dev --extra all`
+2) Create venv and sync deps
+- `uv venv .venv` → `source .venv/bin/activate`
+- `uv sync --dev`
+- All extras: `uv sync --dev --extra all`
 
-3) 実行
-- `ossmk --help`（アクティベート済みの場合）
-- もしくは環境を活性化せずに: `uv run ossmk --help`
+3) Run
+- `ossmk --help` (in venv) or `uv run ossmk --help`
 
-## PyPIインストール（利用者向け）
+## Install from PyPI (users)
 
-- 安定版のインストール: `pip install oss-metrics-kit`
-- Postgres連携込み: `pip install "oss-metrics-kit[exporters-postgres]"`
+- Stable: `pip install oss-metrics-kit`
+- With Postgres exporter: `pip install "oss-metrics-kit[exporters-postgres]"`
 
-インストール後に `ossmk --help` が動作すればOKです。
+## Quick start (your GitHub account)
 
-## あなたのGitHubアカウントで試す
+Set a GitHub token (read-only is enough):
 
-前提: GitHubトークンを環境に設定します（read-only 権限で十分）。
-
-```bash
+```
 export GITHUB_TOKEN=ghp_xxx   # or GH_TOKEN
 ```
 
-分析（サマリ＋スコア出力）
+Analyze and print summary + scores:
 
-```bash
+```
 ossmk analyze-user <your_github_login> --out -
 ```
 
-スコアをPostgresに保存（任意）
+Persist scores into Postgres (optional):
 
-```bash
+```
 export OSSMK_PG_DSN="postgresql://user:pass@host:5432/db"
 ossmk analyze-user <your_github_login> --save-pg
 ```
 
-プロプライエタリな重み付け（任意）
+Load proprietary rules (optional):
 
-```bash
+```
 export OSSMK_RULES_FILE=/absolute/path/to/private/rules.toml
 ossmk analyze-user <your_github_login> --out -
 ```
 
-## 使い方（概要）
+## Usage (overview)
 
-- バージョン表示: `ossmk version`
-- GitHubユーザーを分析（並列取得・since/GraphQL対応）: `ossmk analyze-user <login> --since 90d --api auto --out -`
-- `<login>` は GitHub のユーザー名（プロフィールURLが `https://github.com/<login>` の `<login>` 部分。例: `torvalds`, `octocat`, `refactoring-my-path`）
-- 単一リポのイベント取得: `ossmk fetch --provider github --repo owner/name --since 30d --out -`
-- スコア保存（DB切替え可能）: `ossmk save postgresql://... --input scores.json` または `ossmk save sqlite:///./metrics.db --input scores.json`
+- Version: `ossmk version`
+- Analyze GitHub user (parallel fetch, since/GraphQL aware): `ossmk analyze-user <login> --since 90d --api auto --out -`
+- Fetch repo events: `ossmk fetch --provider github --repo owner/name --since 30d --out -`
+- Save scores: `ossmk save postgresql://... --input scores.json` or `ossmk save sqlite:///./metrics.db --input scores.json`
 
-ストレージはDSNで切り替え（Postgres/SQLite）。Parquetはオプション機能（分析用）です。
+Storage is selected via DSN (Postgres/SQLite). Parquet output is available as an optional exporter.
 
-### LLMベースのルール支援（任意）
+### LLM-assisted rules (optional)
 
-- ルール提案: `ossmk rules-llm --input events.json --provider openai --model gpt-4o-mini --out rules.toml`
-- 必要なエクストラ: `pip install "oss-metrics-kit[llm-openai]"` または `oss-metrics-kit[llm-anthropic]`
-- 詳細: `docs/LLM_RULES.md`
+- Suggest rules: `ossmk rules-llm --input events.json --provider openai --model gpt-4o-mini --out rules.toml`
+- Extras: `pip install "oss-metrics-kit[llm-openai]"` or `oss-metrics-kit[llm-anthropic]`
+- See `docs/LLM_RULES.md`
 
-## セキュリティと運用の要点
+## Security & operations
 
-- トークンは環境変数（`GITHUB_TOKEN`/`GH_TOKEN`）で管理し、ログに出さない。
-- レート制限はバックエンドの責務。例として `ossmk.security.ratelimit.RateLimiter` を提供（本番はRedis等で共有化）。
-- 私有ルール（TOML）はリポ外に保管し、`OSSMK_RULES_FILE` で指定。`rules=auto|default` で自動ロード。
-- 依存はエクストラで分離（Postgres/Parquet/LLM）。最小構成で運用可能。
+- Keep tokens in env (`GITHUB_TOKEN`/`GH_TOKEN`) and never log them.
+- Rate limiting is a backend responsibility; a simple example is provided at `ossmk.security.ratelimit.RateLimiter` (use Redis for production).
+- Store private rule TOMLs outside the repo and point `OSSMK_RULES_FILE` to them. `rules=auto|default` will load it.
+- Optional features (Postgres/Parquet/LLM) are separated as extras.
 
-バックエンド統合の詳細は `docs/INTEGRATION.md` を参照。開発時の型/リント方針は `docs/dev.md`。
-一般ユーザー向けの詳しい使い方は `docs/usage.md` を参照。
+See `docs/INTEGRATION.md` for backend integration. Development typing/lint policy: `docs/dev.md`. Detailed usage: `docs/usage.md`.
 
-## 環境変数（まとめ）
+## Environment variables
 
-- `GITHUB_TOKEN` or `GH_TOKEN`: GitHub APIトークン（必須）
-- `OSSMK_RULES_FILE`: 私有ルールTOMLへのパス（任意）
-- `OSSMK_PG_DSN` or `DATABASE_URL`: Postgres DSN（保存時に使用する場合）
-- `REDIS_URL`: Redisレートリミッタで使用（任意）
-- `OSSMK_MAX_SINCE_DAYS`: `since` の最大日数（デフォルト180）
+- `GITHUB_TOKEN` or `GH_TOKEN`: GitHub API token (required)
+- `OSSMK_RULES_FILE`: path to a private rules TOML (optional)
+- `OSSMK_PG_DSN` or `DATABASE_URL`: Postgres DSN (if persisting)
+- `REDIS_URL`: Redis rate limiter (optional)
+- `OSSMK_MAX_SINCE_DAYS`: max backward window for `since` (default 180)
 
-## PyPI公開手順（メンテナ向け）
+## Publishing to PyPI (maintainers)
 
-準備
+Prepare
 
-- PyPIアカウント作成 → API Token発行（スコープ: Upload）。
-- ローカルでビルド&公開に使うツールを準備。
+- Create a PyPI account; optionally an API token (Upload scope) if not using Trusted Publishing.
 
-バージョニング/タグ
+Versioning & tag
 
-- `pyproject.toml` の `version` を SemVer で更新
+- Update `version` in `pyproject.toml` (SemVer)
 - `git commit` → `git tag vX.Y.Z` → `git push --tags`
 
-ビルド（uv 推奨）
+Build (uv recommended)
 
-```bash
-uv build                 # sdist(.tar.gz) + wheel(.whl) を dist/ に出力
+```
+uv build   # produces sdist(.tar.gz) + wheel(.whl) into dist/
 
-# TestPyPIに公開（推奨）
-export PYPI_TOKEN_TEST=...  # pypi- で始まるトークン
+# Publish to TestPyPI (recommended)
+export PYPI_TOKEN_TEST=...
 uv publish --repository testpypi --token "$PYPI_TOKEN_TEST"
 
-# 本番PyPIに公開（Tagと一致する版を公開）
+# Publish to PyPI (match the tag)
 export PYPI_TOKEN=...
 uv publish --token "$PYPI_TOKEN"
 ```
 
-twineを使う場合（代替）
+Using twine (alternative)
 
-```bash
+```
 python -m pip install build twine
-python -m build          # sdist + wheel を dist/ に出力
-
-# アーカイブの健全性チェック（署名/メタデータ）
+python -m build           # sdist + wheel to dist/
 python -m twine check dist/*
-
-# TestPyPI
 twine upload --repository testpypi -u __token__ -p "$PYPI_TOKEN_TEST" dist/*
-
-# PyPI
 twine upload -u __token__ -p "$PYPI_TOKEN" dist/*
 ```
 
-注意点
+Notes
 
-- バージョンはSemVerで更新し、同じ版の再アップロードは不可です。
-- `pyproject.toml` のメタデータ（URL/ライセンス/説明）が公開ページに反映されます。
-- sdist と wheel の両方を用意すると、利用者環境でのインストール成功率が上がります。
-- TestPyPI で動作確認→本番PyPIへ昇格の順を推奨します。
+- Versions are immutable; bump SemVer for every release.
+- `pyproject.toml` metadata (URLs/license/description) appears on the project page.
+- Ship both sdist and wheel to maximize install success across environments.
+- Validate on TestPyPI first, then promote to PyPI.
 
-## 設計ハイライト
+## Design highlights
 
-- `src/` レイアウト＋ `py.typed` による型配布。
-- CLIはTyperで薄く、ビジネスロジックは `ossmk.core` に集約。
-- providers/exporters/storage/rules はエントリポイントでプラガブル。
+- `src/` layout with `py.typed` for type distribution.
+- Thin CLI with Typer; business logic in `ossmk.core`.
+- Providers/exporters/storage/rules via entry points.
 
-## トラブルシューティング
+## Troubleshooting
 
-- `pip._vendor.tomli.TOMLDecodeError: Invalid initial character for a key part (at line 1, column 2)`
-  - 原因: `pyproject.toml` の先頭セクションが不正（`[build-system]` の直前に余計な文字がある）
-  - 対処: 先頭行を `[build-system]` に修正済み。リトライ前にキャッシュを避けるため `pip install -e .` を再実行してください。
+- `pip._vendor.tomli.TOMLDecodeError: Invalid initial character...`
+  - Cause: malformed leading section in `pyproject.toml`
+  - Fix: ensure first section is `[build-system]`, reinstall `pip install -e .`
 
 - `ossmk: command not found`
-  - 原因: パッケージ未インストール、または別環境でインストール。
-  - 対処: リポジトリ直下で `pip install -e .` を実行。Conda/venv を使用している場合は、同じ環境を `activate` 済みか確認。
-  - uv利用時: `uv sync --dev` 後に `source .venv/bin/activate`、または `uv run ossmk --help` を使用。
+  - Cause: not installed or wrong environment activated.
+  - Fix: `pip install -e .` in the repo, and activate the same environment.
+  - With uv: `uv sync --dev` then `source .venv/bin/activate`, or `uv run ossmk --help`.
 
-## ライセンス
+## License
 
 Apache-2.0
+

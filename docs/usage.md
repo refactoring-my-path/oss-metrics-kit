@@ -1,61 +1,61 @@
-# 使い方ガイド（ユーザー/BoostBit向け）
+# Usage Guide (Users / CI)
 
-このガイドは、初めて oss-metrics-kit を使うユーザーや、BoostBit/CI から簡単に扱うための手順をまとめています。
+This guide walks through common usage patterns for oss-metrics-kit and how to run it in CI.
 
-## インストール
+## Installation
 
-### pip（安定運用）
+### pip (stable)
 
 ```
 pip install oss-metrics-kit
-# Postgres 連携込み
+# With Postgres exporter
 pip install "oss-metrics-kit[exporters-postgres]"
-# Parquet 出力
+# With Parquet exporter
 pip install "oss-metrics-kit[exporters-parquet]"
 ```
 
-### uv（推奨）
+### uv (recommended for dev)
 
 ```
 uv venv .venv && source .venv/bin/activate
 uv sync --dev
-# すべてのエクストラ
+# All extras
 uv sync --dev --extra all
 ```
 
-## 認証（GitHub）
+## Authentication (GitHub)
 
 ```
 export GITHUB_TOKEN=ghp_xxx  # or GH_TOKEN
 ```
 
-GitHub App を使う場合（任意）:
+GitHub App (optional):
 
-- GITHUB_APP_ID
-- GITHUB_APP_PRIVATE_KEY（PEM文字列）
-- GITHUB_APP_INSTALLATION_ID（または OSSMK_GH_INSTALLATION_OWNER で自動検出）
+- `GITHUB_APP_ID`
+- `GITHUB_APP_PRIVATE_KEY` (PEM)
+- `GITHUB_APP_INSTALLATION_ID` (or `OSSMK_GH_INSTALLATION_OWNER` to auto-detect)
 
-## よく使うコマンド
+## Common commands
 
-- バージョン表示
+- Version
 
 ```
 ossmk version
 ```
 
-- ユーザー分析（90日、REST/GraphQL 自動）
+- Analyze a user (90 days, auto REST/GraphQL)
 
 ```
 ossmk analyze-user <login> --since 90d --api auto --out -
 ```
 
-- リポジトリからイベント収集（JSON）
+- Fetch repo events (JSON)
 
 ```
 ossmk fetch --provider github --repo owner/name --since 30d --out -
 ```
 
-- スコアをDBに保存
+- Save scores to DB
 
 ```
 # Postgres
@@ -66,13 +66,13 @@ ossmk save "$OSSMK_PG_DSN" --input scores.json
 ossmk save sqlite:///./metrics.db --input scores.json
 ```
 
-- スコアを Parquet に出力
+- Export scores to Parquet
 
 ```
 ossmk analyze-user <login> --out parquet:./scores.parquet
 ```
 
-## LLM によるルール提案（任意）
+## LLM-assisted rule suggestions (optional)
 
 ```
 # OpenAI
@@ -84,9 +84,7 @@ pip install "oss-metrics-kit[llm-anthropic]"
 ossmk rules-llm --input events.json --provider anthropic --model claude-3-haiku --out rules.toml
 ```
 
-## CI 統合（GitHub Actions 例）
-
-以下は、CI（GitHub Actions）で定期分析→成果をアーティファクト/DBへ保存する例です。
+## CI integration (GitHub Actions example)
 
 ```
 name: Analyze OSS Activity
@@ -112,23 +110,24 @@ jobs:
           path: analysis.json
 ```
 
-他の CI（CircleCI, Jenkins 等）も、環境変数を設定して同様のコマンドを実行してください。
+Other CIs (CircleCI, Jenkins, etc.) can run the same commands with appropriate environment variables.
 
-## 環境変数まとめ
+## Environment variables
 
-- 認証: GITHUB_TOKEN or GH_TOKEN
-- ルール: OSSMK_RULES_FILE
-- 保存先: OSSMK_PG_DSN or DATABASE_URL
-- 並列度: OSSMK_CONCURRENCY（デフォルト5、最大20）
-- 範囲制限: OSSMK_MAX_SINCE_DAYS（デフォルト180）
-- Bot除外: OSSMK_EXCLUDE_BOTS=1（デフォルト1）
+- Auth: `GITHUB_TOKEN` or `GH_TOKEN`
+- Rules: `OSSMK_RULES_FILE`
+- Storage: `OSSMK_PG_DSN` or `DATABASE_URL`
+- Concurrency: `OSSMK_CONCURRENCY` (default 5, max 20)
+- Window cap: `OSSMK_MAX_SINCE_DAYS` (default 180)
+- Bot exclusion: `OSSMK_EXCLUDE_BOTS=1` (default 1)
 
-## トラブルシューティング
+## Troubleshooting
 
-- 429/403 が頻発する → OSSMK_CONCURRENCY を下げる／時間を空ける／GraphQL と REST を切替
-- Parquet 出力でエラー → `pip install "oss-metrics-kit[exporters-parquet]"`
-- Postgres 接続不可 → DSN 形式を確認（例: `postgresql://user:pass@host:5432/db`）
+- Frequent 429/403 → lower `OSSMK_CONCURRENCY`, wait and retry, switch between REST/GraphQL as needed
+- Parquet error → install `oss-metrics-kit[exporters-parquet]`
+- Postgres connection fails → verify DSN format (e.g., `postgresql://user:pass@host:5432/db`)
 
-## 参考
+## See also
 
-- 開発者向けの型/リント規約: `docs/dev.md`
+- Developer typing/lint policy: `docs/dev.md`
+
