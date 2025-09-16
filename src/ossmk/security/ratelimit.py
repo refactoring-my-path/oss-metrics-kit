@@ -14,7 +14,13 @@ class RateLimiter:
 
     capacity: int
     window_seconds: int
-    buckets: dict[str, tuple[int, float]] = field(default_factory=dict)  # key -> (tokens, reset_ts)
+    buckets: dict[str, tuple[int, float]] = field(  # key -> (tokens, reset_ts)
+        default_factory=lambda: {}  # use lambda to help type inference
+    )
+
+    def __post_init__(self) -> None:
+        # Reassign through a typed copy to satisfy strict checkers
+        self.buckets = dict(self.buckets)
 
     def try_acquire(self, key: str, tokens: int = 1) -> bool:
         now = time.time()

@@ -153,14 +153,11 @@ def rules_llm(
     payload = _read_json_input(input)
     events_list: list[dict[str, Any]]
     if isinstance(payload, list):
-        events_list = [cast(dict[str, Any], e) for e in payload]
+        payload_list: list[Any] = cast(list[Any], payload)
     else:
         raw_events = payload.get("events", [])
-        events_list = (
-            [cast(dict[str, Any], e) for e in raw_events]
-            if isinstance(raw_events, list)
-            else []
-        )
+        payload_list = cast(list[Any], raw_events) if isinstance(raw_events, list) else []
+    events_list = [cast(dict[str, Any], e) for e in payload_list]
     cfg = LLMConfig(provider=provider, model=model, api_key=api_key)
     toml_text = suggest_rules_from_events(events_list, cfg)
     with open(out, "w", encoding="utf-8") as f:

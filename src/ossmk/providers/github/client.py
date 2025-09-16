@@ -439,7 +439,8 @@ class GitHubProvider:
                 nodes = cast(list[Any], history.get("nodes") or [])
                 for n_any in nodes:
                     n = cast(dict[str, Any], n_any)
-                    au = cast(dict[str, Any], (n.get("author") or {}).get("user") or {})
+                    author_obj = cast(dict[str, Any], n.get("author") or {})
+                    au = cast(dict[str, Any], author_obj.get("user") or {})
                     login = str(au.get("login") or "unknown")
                     if os.getenv("OSSMK_EXCLUDE_BOTS", "1") == "1" and is_bot_login(login):
                         continue
