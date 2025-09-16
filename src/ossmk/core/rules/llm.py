@@ -28,7 +28,7 @@ def _openai_complete(cfg: LLMConfig, content: str) -> str:
             "OpenAI client not installed. pip install 'oss-metrics-kit[llm-openai]'"
         ) from e
     client: Any = cast(Any, OpenAI(api_key=cfg.api_key))
-    resp: Any = cast(Any, client).chat.completions.create(
+    resp: Any = client.chat.completions.create(
         model=cfg.model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -41,21 +41,25 @@ def _openai_complete(cfg: LLMConfig, content: str) -> str:
 
 def _anthropic_complete(cfg: LLMConfig, content: str) -> str:
     try:
-        import anthropic  # type: ignore
+        import anthropic  # type: ignore[reportMissingImports]
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
             "Anthropic client not installed. pip install 'oss-metrics-kit[llm-anthropic]'"
         ) from e
-    client: Any = cast(Any, anthropic.Anthropic(api_key=cfg.api_key))
-    msg: Any = cast(Any, client).messages.create(
+    anthropic_mod: Any = anthropic
+    client: Any = anthropic_mod.Anthropic(api_key=cfg.api_key)
+    msg: Any = client.messages.create(
         model=cfg.model,
         max_tokens=1000,
         temperature=0.2,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": content}],
     )
-    # anthropic returns list of content blocks
-    return "".join(cast(Any, block).text for block in msg.content)
+    # anthropic returns list of content blocks; avoid unknown member types
+    parts: list[str] = []
+    for block in msg.content:
+        parts.append(str(getattr(block, "text", "")))
+    return "".join(parts)
 
 
 def suggest_rules_from_events(events: list[dict[str, Any]], cfg: LLMConfig) -> str:
