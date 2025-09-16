@@ -93,7 +93,8 @@ ossmk analyze-user <your_github_login> --out -
 - 私有ルール（TOML）はリポ外に保管し、`OSSMK_RULES_FILE` で指定。`rules=auto|default` で自動ロード。
 - 依存はエクストラで分離（Postgres/Parquet/LLM）。最小構成で運用可能。
 
-バックエンド統合の詳細は `docs/INTEGRATION.md` を参照。BoostBit向けの手順集は `docs/BOOSTBIT_QUICKSTART.md` を参照。
+バックエンド統合の詳細は `docs/INTEGRATION.md` を参照。開発時の型/リント方針は `docs/dev.md`。
+一般ユーザー向けの詳しい使い方は `docs/usage.md` を参照。
 
 ## 環境変数（まとめ）
 
@@ -110,17 +111,21 @@ ossmk analyze-user <your_github_login> --out -
 - PyPIアカウント作成 → API Token発行（スコープ: Upload）。
 - ローカルでビルド&公開に使うツールを準備。
 
-uvを使う場合（推奨）
+バージョニング/タグ
+
+- `pyproject.toml` の `version` を SemVer で更新
+- `git commit` → `git tag vX.Y.Z` → `git push --tags`
+
+ビルド（uv 推奨）
 
 ```bash
-# ビルド
-uv build
+uv build                 # sdist(.tar.gz) + wheel(.whl) を dist/ に出力
 
 # TestPyPIに公開（推奨）
 export PYPI_TOKEN_TEST=...  # pypi- で始まるトークン
 uv publish --repository testpypi --token "$PYPI_TOKEN_TEST"
 
-# 本番PyPIに公開
+# 本番PyPIに公開（Tagと一致する版を公開）
 export PYPI_TOKEN=...
 uv publish --token "$PYPI_TOKEN"
 ```
@@ -129,7 +134,10 @@ twineを使う場合（代替）
 
 ```bash
 python -m pip install build twine
-python -m build
+python -m build          # sdist + wheel を dist/ に出力
+
+# アーカイブの健全性チェック（署名/メタデータ）
+python -m twine check dist/*
 
 # TestPyPI
 twine upload --repository testpypi -u __token__ -p "$PYPI_TOKEN_TEST" dist/*
@@ -142,6 +150,8 @@ twine upload -u __token__ -p "$PYPI_TOKEN" dist/*
 
 - バージョンはSemVerで更新し、同じ版の再アップロードは不可です。
 - `pyproject.toml` のメタデータ（URL/ライセンス/説明）が公開ページに反映されます。
+- sdist と wheel の両方を用意すると、利用者環境でのインストール成功率が上がります。
+- TestPyPI で動作確認→本番PyPIへ昇格の順を推奨します。
 
 ## 設計ハイライト
 

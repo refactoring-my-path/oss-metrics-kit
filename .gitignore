@@ -11,6 +11,7 @@ build/
 DEVLOG.md
 DEVLOG.local.md
 BOOSTBIT_PLAYBOOK.md
+docs/BOOSTBIT_INTERNAL.md
 
 # Closed-source/BoostBit proprietary assets (ignored by default)
 private/
