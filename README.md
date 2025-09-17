@@ -120,6 +120,20 @@ Storage is selected via DSN (Postgres/SQLite). Parquet output is available as an
 
 See `docs/INTEGRATION.md` for backend integration. Development typing/lint policy: `docs/dev.md`. Detailed usage: `docs/usage.md`. A beginner tutorial is in `docs/getting-started.md`.
 
+## Python API (import)
+
+The canonical import is:
+
+```
+import ossmk
+```
+
+For convenience, the underscore variant also works and maps to the same package:
+
+```
+import oss_metrics_kit as ossmk
+```
+
 ## Environment variables
 
 - `GITHUB_TOKEN` or `GH_TOKEN`: GitHub API token (required)

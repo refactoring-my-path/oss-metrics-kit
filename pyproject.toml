@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oss-metrics-kit"
-version = "0.0.3"
+version = "0.1.1"
 description = "Unified toolkit to fetch, normalize, score, and export OSS contribution metrics."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -66,7 +66,7 @@ memory = "ossmk.storage.memory:backend"
 default = "ossmk.core.rules:default_rules"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ossmk"]
+packages = ["src/ossmk", "src/oss_metrics_kit"]
 include = ["src/ossmk/py.typed"]
 
 [tool.ruff]
